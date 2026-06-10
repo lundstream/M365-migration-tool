@@ -6,6 +6,7 @@ import { Mapping } from './components/Mapping'
 import { Provisioning } from './components/Provisioning'
 import { Preflight } from './components/Preflight'
 import { MigrationSetup } from './components/MigrationSetup'
+import { MailboxMove } from './components/MailboxMove'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'provisioning', label: 'Provisioning', el: <Provisioning /> },
   { id: 'preflight', label: 'Preflight', el: <Preflight /> },
   { id: 'migration-setup', label: 'Migration Setup', el: <MigrationSetup /> },
+  { id: 'mailbox-move', label: 'Mailbox Moves', el: <MailboxMove /> },
 ]
 
 function App() {

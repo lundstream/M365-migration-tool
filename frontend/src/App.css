@@ -154,6 +154,28 @@
   overflow-x: auto; margin: 0.5rem 0 0;
 }
 
+/* Destructive completion zone */
+.danger-zone {
+  margin-top: 1.5rem;
+  border: 2px solid #d93025;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  background: rgba(217, 48, 37, 0.06);
+}
+.danger-head {
+  font-weight: 700;
+  color: #d93025;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.4rem;
+}
+.btn.danger {
+  background: #d93025;
+  color: #fff;
+  border-color: #d93025;
+}
+.btn.danger:disabled { background: #d9302580; border-color: transparent; }
+
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.85em; word-break: break-all; }

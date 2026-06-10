@@ -49,8 +49,10 @@
     "migrationAppId": "00000000-0000-0000-0000-000000000000",
     "scopeGroupSmtp": "xt-migration-scope@contoso.onmicrosoft.com",
     "spoScenario": "MnA",
+    "targetDeliveryDomain": "fabrikam.mail.onmicrosoft.com",
     "endpointParameters": null,
-    "organizationRelationshipParameters": null
+    "organizationRelationshipParameters": null,
+    "batchParameters": null
   },
   "concurrency": {
     "maxConcurrent": 2,

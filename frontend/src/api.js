@@ -38,6 +38,14 @@ export const api = {
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
 
+  // Phase 5 — mailbox batches
+  mailboxBatches: () => request('/api/mailbox/batches'),
+  mailboxBatch: (id) => request(`/api/mailbox/batches/${id}`),
+  mailboxBatchCreate: (name, items) => request('/api/mailbox/batches', { method: 'POST', body: JSON.stringify({ name, items, confirm: true }) }),
+  mailboxBatchRefresh: (id) => request(`/api/mailbox/batches/${id}/refresh`, { method: 'POST' }),
+  mailboxBatchForwarding: (id) => request(`/api/mailbox/batches/${id}/forwarding`, { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+  mailboxBatchComplete: (id, confirmToken) => request(`/api/mailbox/batches/${id}/complete`, { method: 'POST', body: JSON.stringify({ confirm: true, confirmToken }) }),
+
   // Phase 3 — preflight
   preflightRun: () => request('/api/preflight/run', { method: 'POST' }),
   preflightLatest: () => request('/api/preflight/latest'),
