@@ -176,6 +176,14 @@
 }
 .btn.danger:disabled { background: #d9302580; border-color: transparent; }
 
+.oneanddone {
+  border: 1px solid #f9ab00;
+  background: rgba(249, 171, 0, 0.1);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+}
+
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.85em; word-break: break-all; }

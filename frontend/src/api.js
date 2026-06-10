@@ -38,6 +38,13 @@ export const api = {
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
 
+  // Phase 6 — file moves (OneDrive + SharePoint)
+  fileMoveJobs: () => request('/api/file-move/jobs'),
+  fileMoveValidate: (type, source, target) => request('/api/file-move/validate', { method: 'POST', body: JSON.stringify({ type, source, target }) }),
+  fileMoveStart: (body) => request('/api/file-move/start', { method: 'POST', body: JSON.stringify({ ...body, confirm: true }) }),
+  fileMoveRefresh: (id) => request(`/api/file-move/jobs/${id}/refresh`, { method: 'POST' }),
+  fileMoveStop: (id) => request(`/api/file-move/jobs/${id}/stop`, { method: 'POST' }),
+
   // Phase 5 — mailbox batches
   mailboxBatches: () => request('/api/mailbox/batches'),
   mailboxBatch: (id) => request(`/api/mailbox/batches/${id}`),
