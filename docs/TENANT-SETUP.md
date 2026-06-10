@@ -55,6 +55,8 @@ App registration → **Certificates & secrets → Certificates → Upload certif
 | Microsoft Graph | `Organization.Read.All` (or `Directory.Read.All`) | subscribed SKUs for the add-on check (Phase 3) |
 | Microsoft Graph | `User.ReadWrite.All` *(target only)* | create/force-password target MailUsers (Provisioning) |
 | Microsoft Graph | `Domain.Read.All` *(target only)* | list verified target domains for new UPNs (Provisioning) |
+| Microsoft Graph | `Group.Read.All` *(source)* | read source groups + membership (Groups) |
+| Microsoft Graph | `Group.ReadWrite.All` *(target only)* | recreate groups + add members (Groups) |
 | Office 365 Exchange Online | `Exchange.ManageAsApp` | app-only EXO connection |
 | SharePoint | `Sites.FullControl.All` | SPO admin + cross-tenant relationship cmdlets |
 

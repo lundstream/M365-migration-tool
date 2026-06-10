@@ -10,15 +10,21 @@ import { MailboxMove } from './components/MailboxMove'
 import { FileMove } from './components/FileMove'
 import { Monitor } from './components/Monitor'
 import { Reports } from './components/Reports'
+import { Manifest } from './components/Manifest'
+import { Groups } from './components/Groups'
+import { Permissions } from './components/Permissions'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
   { id: 'connections', label: 'Connections', el: <Connections /> },
   { id: 'mapping', label: 'Identity Mapping', el: <Mapping /> },
+  { id: 'manifest', label: 'Manifest', el: <Manifest /> },
   { id: 'provisioning', label: 'Provisioning', el: <Provisioning /> },
+  { id: 'groups', label: 'Groups', el: <Groups /> },
   { id: 'preflight', label: 'Preflight', el: <Preflight /> },
   { id: 'migration-setup', label: 'Migration Setup', el: <MigrationSetup /> },
   { id: 'mailbox-move', label: 'Mailbox Moves', el: <MailboxMove /> },
+  { id: 'permissions', label: 'Shared Mbx Perms', el: <Permissions /> },
   { id: 'file-move', label: 'OneDrive / SharePoint', el: <FileMove /> },
   { id: 'monitor', label: 'Monitoring', el: <Monitor /> },
   { id: 'reports', label: 'Reports', el: <Reports /> },

@@ -180,6 +180,7 @@ function Invoke-Provisioning {
         [ValidateSet('random', 'shared')] [string]$PasswordMode = 'random',
         [string]$SharedPassword,
         [bool]$ForceChange = $true,
+        [bool]$AddToGroups = $false,
         [hashtable]$Overrides = @{}
     )
 
@@ -241,6 +242,23 @@ function Invoke-Provisioning {
 
                     $res.status = 'created'
                     $res.password = $pw
+
+                    # Optional: add the new user to mapped target groups (Phase 9).
+                    if ($AddToGroups) {
+                        try {
+                            Import-Module Microsoft.Graph.Groups -ErrorAction Stop
+                            $newId = (Get-MgUser -UserId $row.newUpn -Property id -ErrorAction Stop).Id
+                            $tg = Invoke-DbQuery -Query @'
+SELECT g.target_group_id FROM group_members gm
+JOIN groups g ON gm.group_id = g.group_id
+WHERE lower(gm.member_upn) = lower(@u) AND g.target_group_id IS NOT NULL;
+'@ -SqlParameters @{ u = $row.sourceUpn }
+                            foreach ($grp in @($tg)) {
+                                try { New-MgGroupMember -GroupId $grp.target_group_id -DirectoryObjectId $newId -ErrorAction Stop } catch { }
+                            }
+                        }
+                        catch { }
+                    }
                 }
                 catch {
                     $res.status = 'failed'

@@ -24,6 +24,7 @@ export function Provisioning() {
   const [pwMode, setPwMode] = useState('random')
   const [sharedPw, setSharedPw] = useState('')
   const [forceChange, setForceChange] = useState(true)
+  const [addToGroups, setAddToGroups] = useState(false)
   const [plan, setPlan] = useState(null)
   const [creds, setCreds] = useState(null) // execute result incl. one-time passwords
   const [latest, setLatest] = useState(null)
@@ -87,7 +88,7 @@ export function Provisioning() {
       const body = {
         confirm: true, sourceUpns: selectedUpns, targetDomain: domain,
         passwordMode: pwMode, sharedPassword: pwMode === 'shared' ? sharedPw : undefined,
-        forceChange,
+        forceChange, addToGroups,
       }
       const res = await api.provisioningExecute(body)
       setCreds(res)
@@ -131,6 +132,7 @@ export function Provisioning() {
               <input type="text" placeholder="shared temp password" value={sharedPw} onChange={(e) => setSharedPw(e.target.value)} />
             )}
             <label><input type="checkbox" checked={forceChange} onChange={(e) => setForceChange(e.target.checked)} /> Force change at first sign-in</label>
+            <label><input type="checkbox" checked={addToGroups} onChange={(e) => setAddToGroups(e.target.checked)} /> Add to mapped target groups</label>
           </fieldset>
         </div>
         <div className="btn-row">

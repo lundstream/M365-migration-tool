@@ -42,11 +42,13 @@ Add-PodeRoute -Method Post -Path '/api/provisioning/execute' -ArgumentList $boot
         if ($d.overrides) { $d.overrides.PSObject.Properties | ForEach-Object { $overrides[$_.Name] = $_.Value } }
         $forceChange = $true
         if ($null -ne $d.forceChange) { $forceChange = [bool]$d.forceChange }
+        $addToGroups = $false
+        if ($null -ne $d.addToGroups) { $addToGroups = [bool]$d.addToGroups }
 
         $result = Invoke-Provisioning -Config $config -RunId $runId `
             -SourceUpns @($d.sourceUpns) -TargetDomain $d.targetDomain `
             -PasswordMode $d.passwordMode -SharedPassword $d.sharedPassword `
-            -ForceChange $forceChange -Overrides $overrides
+            -ForceChange $forceChange -AddToGroups $addToGroups -Overrides $overrides
 
         # Log counts only — never passwords.
         Write-JsonLog -RunId $runId -Level Information -Message 'Provisioning complete' -Data @{ created = $result.created; skipped = $result.skipped; failed = $result.failed }

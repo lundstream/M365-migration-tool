@@ -29,6 +29,7 @@ if ($IncludeServiceModules) {
         'ExchangeOnlineManagement',
         'Microsoft.Graph.Authentication',
         'Microsoft.Graph.Users',
+        'Microsoft.Graph.Groups',
         'Microsoft.Graph.Identity.DirectoryManagement',
         'PnP.PowerShell'
     )

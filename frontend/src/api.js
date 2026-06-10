@@ -38,6 +38,17 @@ export const api = {
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
 
+  // Phase 9 — manifest / groups / permissions
+  manifest: () => request('/api/manifest'),
+  manifestCapture: (scope) => request('/api/manifest/capture', { method: 'POST', body: JSON.stringify({ scope }) }),
+  groups: () => request('/api/groups'),
+  groupsSync: () => request('/api/groups/sync', { method: 'POST' }),
+  groupsCreate: (groupIds) => request('/api/groups/create', { method: 'POST', body: JSON.stringify({ groupIds, confirm: true }) }),
+  permissions: () => request('/api/permissions'),
+  sharedMailboxes: () => request('/api/permissions/shared-mailboxes'),
+  permissionsCapture: (mailboxes) => request('/api/permissions/capture', { method: 'POST', body: JSON.stringify({ mailboxes }) }),
+  permissionsReapply: () => request('/api/permissions/reapply', { method: 'POST', body: JSON.stringify({ confirm: true }) }),
+
   // Phase 8 — reports
   report: (name) => request(`/api/reports/${name}`),
   reportExportUrl: (name, ext) => `/api/reports/export/${name}.${ext}`,

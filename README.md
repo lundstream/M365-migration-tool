@@ -141,6 +141,16 @@ M365-migration-tool/
   cmdlet, full audit trail (who/when/what + correlation ids), and a **post-migration
   reconciliation** report (intended mappings vs actual completed moves). CSV + self-contained
   HTML export.
+- **Phase 9 — Groups, permissions, manifest:**
+  - **Manifest** — a pre-migration **inventory snapshot** (mailbox sizes/counts, OneDrive +
+    site URLs/storage). *Not a content backup* — a cross-tenant tool can't back up content;
+    the restore path is keeping the source tenant intact through a retention window. The
+    manifest proves what existed and feeds reconciliation.
+  - **Groups** *(gated)* — recreate source security/M365 groups in the target with membership
+    remapped via the mapping (distribution / mail-enabled-security flagged for EXO).
+    Provisioning can optionally add created users to their mapped target groups.
+  - **Shared mailbox permissions** *(gated)* — capture FullAccess / SendAs / SendOnBehalf from
+    source and re-apply on target (mailbox + trustee remapped), since moves don't carry them.
 
 ---
 
