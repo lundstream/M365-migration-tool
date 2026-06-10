@@ -9,9 +9,14 @@ validation, batching, scheduling, monitoring, reporting, and safe cutover.
 See [`M365-migration-tool-brief.md`](M365-migration-tool-brief.md) for the full build brief,
 guardrails, and phased plan.
 
-> **Status:** Phases 0–3 complete (tagged `v0.1-preflight`). A genuinely useful,
-> **completely non-destructive** tool: connection health, identity mapping, and preflight
-> reporting. No mutating/migration logic yet — that begins in Phase 4.
+> **Status:** All phases (0–8) complete. Read-only phases (connections, mapping, preflight,
+> reporting) plus the gated mutating phases (provisioning, migration setup, mailbox + file
+> moves) and unified monitoring. `v0.1-preflight` tags the non-destructive milestone.
+>
+> Every mutating action is gated behind explicit confirmation, snapshots state before
+> destructive steps, and is recorded in the audit trail. Cross-tenant cmdlet signatures are
+> verified offline where the module allows (SharePoint) and guarded at runtime where it does
+> not (Exchange Online REST cmdlets) — see guardrail #4.
 
 ---
 
@@ -116,6 +121,26 @@ M365-migration-tool/
   **blocks** the move), and the migration/organization + SPO cross-tenant relationships
   exist. Produces a per-check **PASS / WARN / BLOCK** report on-screen and as exportable
   HTML/CSV. Unverifiable checks degrade to WARN with the reason rather than failing.
+- **Provisioning** *(mutating, gated)* — creates target **MailUsers** from selected source
+  users (copied attributes, new UPN on a target domain, temporary password: random-per-user
+  or shared, force-change). Read-only preview before a confirmed execute; idempotent;
+  passwords returned once and never stored.
+- **Phase 4 — Migration setup** *(mutating, gated)* — detect-then-create the migration
+  endpoint, target organization relationship, and SPO cross-tenant relationship. Existing
+  prerequisites are left untouched; snapshots + audit; EXO creates are runtime-guarded.
+- **Phase 5 — Mailbox moves** *(DESTRUCTIVE on complete)* — cross-tenant batches that **sync
+  only** on start. Completion (which **deletes source mailboxes**) is a separate action,
+  refused unless all items are Synced and the operator types the batch name. Snapshots before
+  completion; resume via SQLite; throttling-aware retry; source→target forwarding.
+- **Phase 6 — OneDrive / SharePoint** *(one-and-done)* — bulk OneDrive + site moves with
+  validate-first, explicit cutover window, source-redirect status, and a unique constraint
+  enforcing no incremental re-runs. SPO cmdlet syntax verified offline.
+- **Phase 7 — Monitoring** — one normalized progress view across mailbox batches + file moves
+  (per-item percent, ETA, throttling indicator). Cheap auto-poll + on-demand live refresh.
+- **Phase 8 — Reports** — per-run summary, per-user/site status, failures with the failing
+  cmdlet, full audit trail (who/when/what + correlation ids), and a **post-migration
+  reconciliation** report (intended mappings vs actual completed moves). CSV + self-contained
+  HTML export.
 
 ---
 

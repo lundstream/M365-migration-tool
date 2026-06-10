@@ -9,6 +9,7 @@ import { MigrationSetup } from './components/MigrationSetup'
 import { MailboxMove } from './components/MailboxMove'
 import { FileMove } from './components/FileMove'
 import { Monitor } from './components/Monitor'
+import { Reports } from './components/Reports'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'mailbox-move', label: 'Mailbox Moves', el: <MailboxMove /> },
   { id: 'file-move', label: 'OneDrive / SharePoint', el: <FileMove /> },
   { id: 'monitor', label: 'Monitoring', el: <Monitor /> },
+  { id: 'reports', label: 'Reports', el: <Reports /> },
 ]
 
 function App() {

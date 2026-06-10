@@ -38,6 +38,10 @@ export const api = {
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
 
+  // Phase 8 — reports
+  report: (name) => request(`/api/reports/${name}`),
+  reportExportUrl: (name, ext) => `/api/reports/export/${name}.${ext}`,
+
   // Phase 7 — monitoring
   monitor: () => request('/api/monitor'),
   monitorRefresh: () => request('/api/monitor/refresh', { method: 'POST' }),
