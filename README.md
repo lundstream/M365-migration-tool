@@ -123,6 +123,11 @@ M365-migration-tool/
 
 Prerequisites: **PowerShell 7**, **Node.js 18+**, and **git** (all present on the dev box).
 
+> **Tenant configuration** (Entra app registrations, certificates, permissions, and the
+> cross-tenant migration prerequisites for each tenant) is documented in
+> [docs/TENANT-SETUP.md](docs/TENANT-SETUP.md). Generate auth certs with
+> [scripts/New-MigrationCertificate.ps1](scripts/New-MigrationCertificate.ps1).
+
 ```powershell
 # 1. Install backend PowerShell modules.
 #    Pode + PSSQLite only:

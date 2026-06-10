@@ -1,5 +1,8 @@
 # --- Secrets & local config (NEVER commit) ---
 config/config.json
+certs/
+*.pfx
+*.cer
 
 # --- Runtime data: SQLite db + JSONL/run logs ---
 /data/
