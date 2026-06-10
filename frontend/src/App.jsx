@@ -1,67 +1,43 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import './App.css'
+import { Health } from './components/Health'
+import { Connections } from './components/Connections'
+import { Mapping } from './components/Mapping'
+import { Preflight } from './components/Preflight'
+
+const TABS = [
+  { id: 'health', label: 'Health', el: <Health /> },
+  { id: 'connections', label: 'Connections', el: <Connections /> },
+  { id: 'mapping', label: 'Identity Mapping', el: <Mapping /> },
+  { id: 'preflight', label: 'Preflight', el: <Preflight /> },
+]
 
 function App() {
-  const [state, setState] = useState({ status: 'loading', data: null, error: null })
-
-  async function checkHealth() {
-    setState((s) => ({ ...s, status: 'loading' }))
-    try {
-      const res = await fetch('/api/health')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setState({ status: 'ok', data, error: null })
-    } catch (err) {
-      setState({ status: 'down', data: null, error: String(err) })
-    }
-  }
-
-  useEffect(() => {
-    checkHealth()
-  }, [])
-
-  const up = state.status === 'ok'
-  const color = state.status === 'loading' ? '#9aa0a6' : up ? '#1e8e3e' : '#d93025'
+  const [active, setActive] = useState('health')
 
   return (
-    <main className="app">
-      <header>
+    <div className="shell">
+      <header className="app-header">
         <h1>M365 Cross-Tenant Migration Tool</h1>
-        <p className="sub">Phase 0 — scaffold &amp; health check</p>
+        <p className="sub">Read-only through Phase 3 — no tenant mutations</p>
       </header>
 
-      <section className="card">
-        <div className="status-row">
-          <span className="dot" style={{ backgroundColor: color }} />
-          <span className="status-label">
-            {state.status === 'loading' && 'Checking backend…'}
-            {state.status === 'ok' && 'Backend healthy'}
-            {state.status === 'down' && 'Backend unreachable'}
-          </span>
-          <button className="refresh" onClick={checkHealth}>
-            Refresh
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            className={`tab ${active === t.id ? 'active' : ''}`}
+            onClick={() => setActive(t.id)}
+          >
+            {t.label}
           </button>
-        </div>
+        ))}
+      </nav>
 
-        {up && (
-          <dl className="meta">
-            <dt>Service</dt><dd>{state.data.service}</dd>
-            <dt>Version</dt><dd>{state.data.version}</dd>
-            <dt>PowerShell</dt><dd>{state.data.powershell}</dd>
-            <dt>Database</dt><dd className="mono">{state.data.db}</dd>
-            <dt>Server time (UTC)</dt><dd className="mono">{state.data.timeUtc}</dd>
-          </dl>
-        )}
-
-        {state.status === 'down' && (
-          <p className="error">
-            {state.error}
-            <br />
-            Start the backend: <code>pwsh -File backend/server.ps1</code>
-          </p>
-        )}
-      </section>
-    </main>
+      <main className="content">
+        {TABS.find((t) => t.id === active)?.el}
+      </main>
+    </div>
   )
 }
 

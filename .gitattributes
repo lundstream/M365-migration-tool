@@ -1,0 +1,7 @@
+# Normalize line endings; keep PowerShell + shell scripts LF-clean in the repo.
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.sql text eol=lf
+*.png binary
+*.svg text eol=lf

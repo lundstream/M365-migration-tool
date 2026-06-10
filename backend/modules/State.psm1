@@ -123,6 +123,27 @@ function Get-DatabasePath {
     return $script:DbPath
 }
 
+function Set-DatabasePath {
+    <#
+    .SYNOPSIS
+        Points this runspace at an already-initialized database (no migrations run).
+    .DESCRIPTION
+        Pode serves each request in its own runspace, so module-scoped state does not
+        carry over from server startup. Routes call this to attach to the existing DB
+        created by Initialize-Database at boot.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string]$Path
+    )
+    if (-not (Get-Module -ListAvailable -Name PSSQLite)) {
+        throw 'PSSQLite is not installed. Run scripts/Install-Requirements.ps1.'
+    }
+    Import-Module PSSQLite -ErrorAction Stop
+    $script:DbPath = $Path
+    return $script:DbPath
+}
+
 function New-Run {
     <#
     .SYNOPSIS
@@ -175,4 +196,4 @@ VALUES (@run, @corr, @actor, @action, @target, @detail, @created);
 }
 
 Export-ModuleMember -Function Initialize-Database, Invoke-DbQuery, Invoke-DbMigration, `
-    Get-DatabasePath, New-Run, Add-AuditEntry
+    Get-DatabasePath, Set-DatabasePath, New-Run, Add-AuditEntry

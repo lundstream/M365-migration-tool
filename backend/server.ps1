@@ -53,12 +53,15 @@ Write-Host "  Frontend: $DistDir $(if (Test-Path $DistDir) { '(serving)' } else 
 # Pode runs the server scriptblock in its own runspace with closures disabled, so $using:
 # and outer variables are unavailable inside it. Pass startup values via process env vars,
 # which the in-process Pode runspaces can read.
-$env:MIG_BIND_HOST = $bindHost
-$env:MIG_PORT      = $port
-$env:MIG_API_DIR   = $ApiDir
-$env:MIG_DIST_DIR  = $DistDir
-$env:MIG_DB_PATH   = $dbInfo.DbPath
-$env:MIG_RUN_ID    = $runId
+$env:MIG_BIND_HOST   = $bindHost
+$env:MIG_PORT        = $port
+$env:MIG_API_DIR     = $ApiDir
+$env:MIG_DIST_DIR    = $DistDir
+$env:MIG_DB_PATH     = $dbInfo.DbPath
+$env:MIG_RUN_ID      = $runId
+$env:MIG_BACKEND_DIR = $PSScriptRoot
+$env:MIG_LOG_DIR     = $LogDir
+$env:MIG_CONFIG_PATH = $ConfigPath
 
 Start-PodeServer -ScriptBlock {
 

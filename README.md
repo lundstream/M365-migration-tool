@@ -9,8 +9,9 @@ validation, batching, scheduling, monitoring, reporting, and safe cutover.
 See [`M365-migration-tool-brief.md`](M365-migration-tool-brief.md) for the full build brief,
 guardrails, and phased plan.
 
-> **Status:** Phase 0 complete — scaffold + SPO hosting risk spike resolved. No migration
-> logic yet. Everything so far is read-only / local.
+> **Status:** Phases 0–3 complete (tagged `v0.1-preflight`). A genuinely useful,
+> **completely non-destructive** tool: connection health, identity mapping, and preflight
+> reporting. No mutating/migration logic yet — that begins in Phase 4.
 
 ---
 
@@ -79,17 +80,42 @@ M365-migration-tool/
     config.json                  # real values (gitignored — you create this)
   backend/
     server.ps1                   # Pode entrypoint
-    api/health.ps1               # /api/health route
+    api/                         # one file per resource
+      health.ps1                 #   /api/health
+      connections.ps1            #   /api/connections[/health]   (Phase 1)
+      mapping.ps1                #   /api/mapping/*               (Phase 2)
+      preflight.ps1              #   /api/preflight/*             (Phase 3)
     modules/
+      _bootstrap.ps1             # per-request runspace module loader
       Logging.psm1               # JSONL + run-id + correlation-id
       State.psm1                 # SQLite init, migrations, runs, audit
-    migrations/001_init.sql      # schema_version, runs, audit_log
-  frontend/                      # React + Vite (health dashboard)
+      Connections.psm1           # Graph/EXO/SPO app-only cert auth + health (Phase 1)
+      Mapping.psm1               # Graph user pull, auto-match, CSV          (Phase 2)
+      Preflight.psm1             # read-only validation + HTML/CSV report    (Phase 3)
+    migrations/                  # 001_init, 002_mappings, 003_preflight
+  frontend/                      # React + Vite (tabbed: Health/Connections/Mapping/Preflight)
   scripts/
-    Install-Requirements.ps1     # installs Pode + PSSQLite (+ service modules)
+    Install-Requirements.ps1     # installs Pode + PSSQLite (+ -IncludeServiceModules)
     Test-SpoHosting.ps1          # Phase 0 risk spike
   data/                          # SQLite db + JSONL logs (gitignored, created at runtime)
 ```
+
+## Features by phase
+
+- **Phase 1 — Connections.** App-only certificate auth to Graph, Exchange Online, and the
+  SharePoint admin endpoint for both tenants. `GET /api/connections/health` probes each
+  service per tenant and reports `connected` / `error` / `not-configured` plus the identity
+  in use. Secrets are never logged; thumbprints are redacted to `hasThumbprint` over the API.
+  Read-only.
+- **Phase 2 — Identity mapping.** Pulls users from each tenant via Graph (cached in SQLite),
+  auto-matches on UPN then `proxyAddresses`, flags **matched / unmatched / conflict**
+  (including many-to-one), supports CSV import/export, and flags mapped targets that don't
+  yet exist (needed later as MailUsers). Read-only against tenants.
+- **Phase 3 — Preflight.** For the mapping set, validates (read-only): target MailUsers exist,
+  the Cross Tenant migration add-on is present, source mailboxes aren't on hold (a hold
+  **blocks** the move), and the migration/organization + SPO cross-tenant relationships
+  exist. Produces a per-check **PASS / WARN / BLOCK** report on-screen and as exportable
+  HTML/CSV. Unverifiable checks degrade to WARN with the reason rather than failing.
 
 ---
 
@@ -98,8 +124,11 @@ M365-migration-tool/
 Prerequisites: **PowerShell 7**, **Node.js 18+**, and **git** (all present on the dev box).
 
 ```powershell
-# 1. Install backend PowerShell modules (Pode + PSSQLite)
+# 1. Install backend PowerShell modules.
+#    Pode + PSSQLite only:
 pwsh -File scripts/Install-Requirements.ps1
+#    ...or include the M365 service modules (EXO + Graph + PnP) needed from Phase 1 on:
+pwsh -File scripts/Install-Requirements.ps1 -IncludeServiceModules
 
 # 2. Create your local config (gitignored) from the template
 Copy-Item config/config.example.json config/config.json
