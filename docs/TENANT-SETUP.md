@@ -53,20 +53,26 @@ App registration → **Certificates & secrets → Certificates → Upload certif
 |---|---|---|
 | Microsoft Graph | `User.Read.All` | pull users for identity mapping (Phase 2) |
 | Microsoft Graph | `Organization.Read.All` (or `Directory.Read.All`) | subscribed SKUs for the add-on check (Phase 3) |
+| Microsoft Graph | `User.ReadWrite.All` *(target only)* | create/force-password target MailUsers (Provisioning) |
+| Microsoft Graph | `Domain.Read.All` *(target only)* | list verified target domains for new UPNs (Provisioning) |
 | Office 365 Exchange Online | `Exchange.ManageAsApp` | app-only EXO connection |
 | SharePoint | `Sites.FullControl.All` | SPO admin + cross-tenant relationship cmdlets |
 
 After adding, click **Grant admin consent for &lt;tenant&gt;**.
+
+> The **target** app needs the two write/read permissions marked *(target only)* for the
+> Provisioning feature (creating target MailUsers). The **source** app stays read-only.
 
 ### A5. Give the app an Exchange role ⚪
 
 `Exchange.ManageAsApp` only grants *access*; the app's service principal still needs a
 **directory role** for what it does:
 
-- **Read-only now (Phases 1–3):** assign **Global Reader** (or *Exchange Recipient
-  Administrator*). Enough for `Get-Mailbox` / `Get-MailUser` / connection health.
-- **Mutating later (Phases 4–5):** assign **Exchange Administrator** (mailbox moves,
-  migration endpoint, organization relationship).
+- **Read-only (Phases 1–3), source tenant:** assign **Global Reader** (or *Exchange
+  Recipient Administrator*). Enough for `Get-Mailbox` / `Get-MailUser` / connection health.
+- **Provisioning + mutating (target tenant):** assign **Exchange Administrator** — required
+  to create MailUsers (`New-MailUser`/`Set-User`) and later for mailbox moves, the migration
+  endpoint, and the organization relationship.
 
 Entra → **Roles and administrators** → pick the role → **Add assignment** → select the app.
 

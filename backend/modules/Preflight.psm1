@@ -128,7 +128,7 @@ function Invoke-Preflight {
         # Per-target MailUser existence (bulk per-upn lookup)
         foreach ($m in $candidates) {
             try {
-                $mu = Get-MailUser -Identity $m.targetUpn -ErrorAction Stop
+                Get-MailUser -Identity $m.targetUpn -ErrorAction Stop | Out-Null
                 $targetMailUsers[$m.targetUpn] = $true
             }
             catch { $targetMailUsers[$m.targetUpn] = $false }
@@ -237,8 +237,8 @@ function Get-PreflightRun {
     param([string]$RunId)
 
     if (-not $RunId) {
-        $latest = Invoke-DbQuery -Query 'SELECT run_id FROM preflight_runs ORDER BY created_utc DESC LIMIT 1;'
-        $RunId = (@($latest) | Select-Object -First 1).run_id
+        $first = @(Invoke-DbQuery -Query 'SELECT run_id FROM preflight_runs ORDER BY created_utc DESC LIMIT 1;') | Select-Object -First 1
+        if ($first) { $RunId = $first.run_id }
     }
     if (-not $RunId) { return $null }
 

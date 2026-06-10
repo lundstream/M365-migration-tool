@@ -3,12 +3,14 @@ import './App.css'
 import { Health } from './components/Health'
 import { Connections } from './components/Connections'
 import { Mapping } from './components/Mapping'
+import { Provisioning } from './components/Provisioning'
 import { Preflight } from './components/Preflight'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
   { id: 'connections', label: 'Connections', el: <Connections /> },
   { id: 'mapping', label: 'Identity Mapping', el: <Mapping /> },
+  { id: 'provisioning', label: 'Provisioning', el: <Provisioning /> },
   { id: 'preflight', label: 'Preflight', el: <Preflight /> },
 ]
 

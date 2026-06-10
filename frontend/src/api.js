@@ -28,6 +28,12 @@ export const api = {
   mappingImportCsv: (csv) => request('/api/mapping/import', { method: 'POST', body: JSON.stringify({ csv }) }),
   mappingExportUrl: () => '/api/mapping/export',
 
+  // Provisioning — create target MailUsers
+  provisioningDomains: () => request('/api/provisioning/domains'),
+  provisioningPreview: (body) => request('/api/provisioning/preview', { method: 'POST', body: JSON.stringify(body) }),
+  provisioningExecute: (body) => request('/api/provisioning/execute', { method: 'POST', body: JSON.stringify(body) }),
+  provisioningLatest: () => request('/api/provisioning/latest'),
+
   // Phase 3 — preflight
   preflightRun: () => request('/api/preflight/run', { method: 'POST' }),
   preflightLatest: () => request('/api/preflight/latest'),
