@@ -167,6 +167,31 @@ VALUES (@id, @kind, 'started', @started, @notes);
     return Invoke-DbQuery -Query 'SELECT * FROM runs WHERE run_id = @id;' -SqlParameters @{ id = $RunId }
 }
 
+function Set-AppState {
+    <#
+    .SYNOPSIS
+        Upserts a key/value into the cross-runspace app_state store.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Key, [string]$Value)
+    Invoke-DbQuery -Query @'
+INSERT INTO app_state (key, value, updated_utc) VALUES (@k, @v, @t)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_utc = excluded.updated_utc;
+'@ -SqlParameters @{ k = $Key; v = $Value; t = [DateTime]::UtcNow.ToString('o') } | Out-Null
+}
+
+function Get-AppState {
+    <#
+    .SYNOPSIS
+        Reads a key from app_state. Returns @{ value; updatedUtc } or $null.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Key)
+    $row = @(Invoke-DbQuery -Query 'SELECT value, updated_utc FROM app_state WHERE key = @k;' -SqlParameters @{ k = $Key }) | Select-Object -First 1
+    if (-not $row) { return $null }
+    return @{ value = $row.value; updatedUtc = $row.updated_utc }
+}
+
 function Add-AuditEntry {
     <#
     .SYNOPSIS
@@ -196,4 +221,4 @@ VALUES (@run, @corr, @actor, @action, @target, @detail, @created);
 }
 
 Export-ModuleMember -Function Initialize-Database, Invoke-DbQuery, Invoke-DbMigration, `
-    Get-DatabasePath, Set-DatabasePath, New-Run, Add-AuditEntry
+    Get-DatabasePath, Set-DatabasePath, New-Run, Add-AuditEntry, Set-AppState, Get-AppState

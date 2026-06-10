@@ -184,6 +184,21 @@
   font-size: 0.9rem;
 }
 
+/* Progress bar */
+.bar {
+  position: relative;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.18);
+  overflow: hidden;
+}
+.bar-fill { height: 100%; transition: width 0.4s ease; }
+.bar-label {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-variant-numeric: tabular-nums; color: #1a1a1a;
+}
+
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.85em; word-break: break-all; }

@@ -8,6 +8,7 @@ import { Preflight } from './components/Preflight'
 import { MigrationSetup } from './components/MigrationSetup'
 import { MailboxMove } from './components/MailboxMove'
 import { FileMove } from './components/FileMove'
+import { Monitor } from './components/Monitor'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
@@ -18,6 +19,7 @@ const TABS = [
   { id: 'migration-setup', label: 'Migration Setup', el: <MigrationSetup /> },
   { id: 'mailbox-move', label: 'Mailbox Moves', el: <MailboxMove /> },
   { id: 'file-move', label: 'OneDrive / SharePoint', el: <FileMove /> },
+  { id: 'monitor', label: 'Monitoring', el: <Monitor /> },
 ]
 
 function App() {

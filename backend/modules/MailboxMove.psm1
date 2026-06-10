@@ -77,6 +77,10 @@ function Invoke-WithRetry {
             if ($msg -match 'Retry-After[:\s]+(\d+)') { $delay = [int]$Matches[1] }
             $delay = [Math]::Min($delay, 300)
             if ($RunId) { Write-JsonLog -RunId $RunId -Level Warning -Message "Throttled; backing off ${delay}s (attempt $attempt)" }
+            # Record for the monitor's throttling indicator (cross-runspace).
+            if (Get-Command Set-AppState -ErrorAction SilentlyContinue) {
+                try { Set-AppState -Key 'lastThrottleUtc' -Value ([DateTime]::UtcNow.ToString('o')) } catch { }
+            }
             Start-Sleep -Seconds $delay
         }
     }

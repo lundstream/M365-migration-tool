@@ -7,7 +7,7 @@
 $ErrorActionPreference = 'Stop'
 $modulesDir = $PSScriptRoot
 
-foreach ($name in 'Logging', 'State', 'Connections', 'Mapping', 'Preflight', 'Provisioning', 'MigrationSetup', 'MailboxMove', 'FileMove') {
+foreach ($name in 'Logging', 'State', 'Connections', 'Mapping', 'Preflight', 'Provisioning', 'MigrationSetup', 'MailboxMove', 'FileMove', 'Monitor') {
     $path = Join-Path $modulesDir "$name.psm1"
     if ((Test-Path $path) -and -not (Get-Module -Name $name)) {
         # -Global so exported functions land in the session-global table and remain

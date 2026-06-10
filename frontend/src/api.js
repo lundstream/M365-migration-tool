@@ -38,6 +38,10 @@ export const api = {
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
 
+  // Phase 7 — monitoring
+  monitor: () => request('/api/monitor'),
+  monitorRefresh: () => request('/api/monitor/refresh', { method: 'POST' }),
+
   // Phase 6 — file moves (OneDrive + SharePoint)
   fileMoveJobs: () => request('/api/file-move/jobs'),
   fileMoveValidate: (type, source, target) => request('/api/file-move/validate', { method: 'POST', body: JSON.stringify({ type, source, target }) }),
