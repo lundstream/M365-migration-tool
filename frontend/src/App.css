@@ -23,6 +23,43 @@
   color: var(--muted);
 }
 
+/* Step nav (numbered, left-to-right flow) */
+.steps {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+}
+.step:hover { background: rgba(128, 128, 128, 0.1); }
+.step.active { color: inherit; border-color: var(--accent); background: rgba(37, 99, 235, 0.08); }
+.step-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--border); color: inherit; font-size: 0.8rem; font-weight: 700;
+}
+.step.active .step-no { background: var(--accent); color: #fff; }
+.step-label { font-weight: 600; font-size: 0.9rem; }
+
+.substeps {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
 /* Tabs */
 .tabs {
   display: flex;

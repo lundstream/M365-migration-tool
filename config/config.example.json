@@ -60,5 +60,9 @@
   },
   "logging": {
     "level": "Information"
+  },
+  "project": {
+    "customerName": "Customer AB",
+    "projectName": "Cross-tenant migration (CONTOSO -> FABRIKAM)"
   }
 }
