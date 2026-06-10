@@ -1,0 +1,52 @@
+{
+  "$comment": "Copy this file to config.json (gitignored) and fill in real values. Certificates live in the Windows certificate store; only thumbprints are referenced here. No client secrets in this file.",
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080
+  },
+  "tenants": {
+    "source": {
+      "displayName": "Source Tenant (e.g. CONTOSO)",
+      "tenantId": "00000000-0000-0000-0000-000000000000",
+      "graph": {
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      },
+      "exchangeOnline": {
+        "organization": "contoso.onmicrosoft.com",
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      },
+      "sharePoint": {
+        "adminUrl": "https://contoso-admin.sharepoint.com",
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      }
+    },
+    "target": {
+      "displayName": "Target Tenant (e.g. FABRIKAM)",
+      "tenantId": "00000000-0000-0000-0000-000000000000",
+      "graph": {
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      },
+      "exchangeOnline": {
+        "organization": "fabrikam.onmicrosoft.com",
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      },
+      "sharePoint": {
+        "adminUrl": "https://fabrikam-admin.sharepoint.com",
+        "appId": "00000000-0000-0000-0000-000000000000",
+        "certThumbprint": "REPLACE_WITH_CERT_THUMBPRINT"
+      }
+    }
+  },
+  "concurrency": {
+    "maxConcurrent": 2,
+    "retryAfterDefaultSeconds": 30
+  },
+  "logging": {
+    "level": "Information"
+  }
+}
