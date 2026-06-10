@@ -130,6 +130,7 @@ Implement MigrationSetup.psm1 + UI. DETECT-then-CREATE the prerequisites: migrat
 ```
 Implement MailboxMove.psm1 + UI. Queue-based executor wrapping New-MigrationBatch for cross-tenant moves: bounded concurrency, throttling-aware retry honoring Retry-After, per-item correlation IDs, full resume-after-crash via SQLite state.
 CRITICAL per BRIEF.md guardrails: starting a batch syncs data but must NOT auto-complete. Completion (which deletes the source mailbox) is a SEPARATE explicit operator action, enabled only after a verification step confirms the target mailbox looks good. Snapshot state before completion. Make the destructive nature unmissable in the UI.
+Function to setup forwarding rules from source to target mailboxes.
 ```
 
 ## Phase 6 — OneDrive + SharePoint moves

@@ -5,6 +5,7 @@ import { Connections } from './components/Connections'
 import { Mapping } from './components/Mapping'
 import { Provisioning } from './components/Provisioning'
 import { Preflight } from './components/Preflight'
+import { MigrationSetup } from './components/MigrationSetup'
 
 const TABS = [
   { id: 'health', label: 'Health', el: <Health /> },
@@ -12,6 +13,7 @@ const TABS = [
   { id: 'mapping', label: 'Identity Mapping', el: <Mapping /> },
   { id: 'provisioning', label: 'Provisioning', el: <Provisioning /> },
   { id: 'preflight', label: 'Preflight', el: <Preflight /> },
+  { id: 'migration-setup', label: 'Migration Setup', el: <MigrationSetup /> },
 ]
 
 function App() {

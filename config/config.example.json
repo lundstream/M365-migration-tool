@@ -42,6 +42,16 @@
       }
     }
   },
+  "migration": {
+    "$comment": "Cross-tenant setup (Phase 4). EXO create cmdlets are verified at runtime; override the exact parameters here after confirming with Get-Command <cmdlet> -Syntax on your connected tenant.",
+    "endpointName": "CrossTenantMove",
+    "organizationRelationshipName": "CrossTenant-Migration",
+    "migrationAppId": "00000000-0000-0000-0000-000000000000",
+    "scopeGroupSmtp": "xt-migration-scope@contoso.onmicrosoft.com",
+    "spoScenario": "MnA",
+    "endpointParameters": null,
+    "organizationRelationshipParameters": null
+  },
   "concurrency": {
     "maxConcurrent": 2,
     "retryAfterDefaultSeconds": 30

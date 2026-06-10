@@ -99,10 +99,19 @@ moving on. Nothing here mutates either tenant.
 
 ## Part B — Cross-tenant migration prerequisites
 
-> The tool's **Phase 4** will *detect-then-create* the organization relationship, migration
-> endpoint, and SPO cross-tenant relationship. The items marked **(admin prerequisite)**
-> below are **not** created by the tool and must exist first. Verify every cmdlet's exact
-> syntax with `Get-Command <name> -Syntax` against your installed modules before running it.
+> The tool's **Phase 4** (Migration Setup tab) *detect-then-creates* the migration endpoint,
+> the target-side organization relationship, and the SPO cross-tenant relationship. The items
+> marked **(admin prerequisite)** below are **not** created by the tool and must exist first.
+>
+> **EXO create parameters:** the SharePoint create is exact (verified offline). The Exchange
+> create cmdlets (`New-MigrationEndpoint`, `New-OrganizationRelationship`) can only be
+> introspected once connected, so the tool uses documented best-effort defaults guarded by a
+> runtime check that **aborts** if the live cmdlet lacks an expected parameter. When that
+> happens, run `Get-Command <name> -Syntax` on the connected target tenant and put the exact
+> parameters into `config.migration.endpointParameters` /
+> `config.migration.organizationRelationshipParameters`. Other `config.migration` keys:
+> `endpointName`, `organizationRelationshipName`, `migrationAppId`, `scopeGroupSmtp`,
+> `spoScenario` (`MnA`).
 
 ### B1. Mailbox (Exchange Online) cross-tenant moves
 
@@ -117,7 +126,8 @@ Microsoft's cross-tenant mailbox migration model (MRS-based) requires:
 - **(admin prerequisite) 🟢 Scope group:** a mail-enabled security group in the **source**
   listing the mailboxes permitted to migrate; referenced by the organization relationship.
 - **🔵🟢 Organization relationship** between the two tenants with **mailbox-move capability**
-  enabled on both sides. *(Tool creates/validates in Phase 4.)*
+  enabled on both sides. *(Tool's Phase 4 creates/validates the **target/inbound** side; the
+  **source/outbound** side + scope group is configured separately per Microsoft's docs.)*
 - **🔵 Migration endpoint** on the target of the cross-tenant remote-move type.
   *(Tool creates/validates in Phase 4.)*
 - **(admin prerequisite) 🔵 Target MailUsers:** each migrating user must exist in the target

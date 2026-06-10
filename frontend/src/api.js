@@ -34,6 +34,10 @@ export const api = {
   provisioningExecute: (body) => request('/api/provisioning/execute', { method: 'POST', body: JSON.stringify(body) }),
   provisioningLatest: () => request('/api/provisioning/latest'),
 
+  // Phase 4 — migration setup
+  migrationSetupStatus: () => request('/api/migration-setup/status'),
+  migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
+
   // Phase 3 — preflight
   preflightRun: () => request('/api/preflight/run', { method: 'POST' }),
   preflightLatest: () => request('/api/preflight/latest'),
