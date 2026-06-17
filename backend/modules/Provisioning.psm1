@@ -94,6 +94,17 @@ function Get-TargetDomains {
 
 function Get-LocalPart { param([string]$Upn) return (($Upn -split '@', 2)[0]) }
 
+function Get-OverrideProp {
+    # StrictMode-safe read of an optional per-user override property.
+    param($Overrides, [string]$Key, [string]$Prop)
+    if ($null -eq $Overrides -or -not $Overrides.ContainsKey($Key)) { return $null }
+    $o = $Overrides[$Key]
+    if ($null -eq $o) { return $null }
+    $p = $o.PSObject.Properties[$Prop]
+    if ($p) { return $p.Value }
+    return $null
+}
+
 function Build-ProvisioningPlan {
     <#
     .SYNOPSIS
@@ -129,7 +140,8 @@ function Build-ProvisioningPlan {
     try {
         Connect-TenantGraph -Tenant $tgt
         foreach ($upn in $SourceUpns) {
-            $newUpn = if ($Overrides[$upn].newUpn) { $Overrides[$upn].newUpn } else { '{0}@{1}' -f (Get-LocalPart $upn), $TargetDomain }
+            $ovUpn = Get-OverrideProp $Overrides $upn 'newUpn'
+            $newUpn = if ($ovUpn) { $ovUpn } else { '{0}@{1}' -f (Get-LocalPart $upn), $TargetDomain }
             try { $existing[$newUpn] = [bool](Get-MgUser -UserId $newUpn -Property id -ErrorAction Stop) }
             catch { $existing[$newUpn] = $false }
         }
@@ -139,7 +151,8 @@ function Build-ProvisioningPlan {
     # 3. Compose plan rows.
     $plan = foreach ($upn in $SourceUpns) {
         $d = $details[$upn]
-        $newUpn = if ($Overrides[$upn].newUpn) { $Overrides[$upn].newUpn } else { '{0}@{1}' -f (Get-LocalPart $upn), $TargetDomain }
+        $ovUpn = Get-OverrideProp $Overrides $upn 'newUpn'
+        $newUpn = if ($ovUpn) { $ovUpn } else { '{0}@{1}' -f (Get-LocalPart $upn), $TargetDomain }
         [ordered]@{
             sourceUpn            = $upn
             sourceDisplayName    = $d.DisplayName
@@ -211,7 +224,8 @@ function Invoke-Provisioning {
                 $res.reason = if ($row.targetExists) { 'Target UPN already exists' } else { 'Source user not found' }
             }
             else {
-                $pw = if ($Overrides[$row.sourceUpn].password) { $Overrides[$row.sourceUpn].password }
+                $ovPw = Get-OverrideProp $Overrides $row.sourceUpn 'password'
+                $pw = if ($ovPw) { $ovPw }
                       elseif ($PasswordMode -eq 'shared') { $SharedPassword }
                       else { New-StrongPassword }
                 try {
