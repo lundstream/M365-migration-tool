@@ -14,6 +14,7 @@ import { Manifest } from './components/Manifest'
 import { Groups } from './components/Groups'
 import { Permissions } from './components/Permissions'
 import { Handover } from './components/Handover'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // Left-to-right migration flow: each numbered step has sub-steps (Step N.M).
 const STEPS = [
@@ -85,7 +86,9 @@ function App() {
         ))}
       </nav>
 
-      <main className="content">{active.el}</main>
+      <main className="content">
+        <ErrorBoundary resetKey={active.id}>{active.el}</ErrorBoundary>
+      </main>
     </div>
   )
 }

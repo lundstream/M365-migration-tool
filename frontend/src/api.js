@@ -1,3 +1,23 @@
+// Pode's JSON serializer collapses single-element arrays into a bare object, so a list with
+// exactly one item arrives as {…} instead of [{…}] and breaks .map() in the UI. We re-expand
+// known list fields (recursively, incl. nested) so the frontend always sees arrays.
+const ARRAY_KEYS = new Set([
+  'rows', 'users', 'batches', 'jobs', 'groups', 'permissions', 'mailboxes', 'items', 'plan',
+  'results', 'tenants', 'services', 'mailboxBatches', 'fileMoves', 'manifests', 'columns',
+  'domains', 'notReady',
+])
+function normalizeArrays(node) {
+  if (Array.isArray(node)) { node.forEach(normalizeArrays); return node }
+  if (node && typeof node === 'object') {
+    for (const k of Object.keys(node)) {
+      const v = node[k]
+      if (ARRAY_KEYS.has(k) && v != null && !Array.isArray(v)) node[k] = [v]
+      normalizeArrays(node[k])
+    }
+  }
+  return node
+}
+
 // Tiny fetch wrapper for the Pode JSON API (same-origin in prod, proxied in dev).
 async function request(path, options = {}) {
   const res = await fetch(path, {
@@ -10,7 +30,7 @@ async function request(path, options = {}) {
     const msg = (data && (data.error || data.message)) || `HTTP ${res.status}`
     throw new Error(msg)
   }
-  return data
+  return normalizeArrays(data)
 }
 
 export const api = {
