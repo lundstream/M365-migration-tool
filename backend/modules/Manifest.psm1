@@ -79,7 +79,7 @@ function New-Manifest {
         try {
             Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop
             $s = $src.sharePoint
-            Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -CertificateThumbprint $s.certThumbprint -TenantId $src.tenantId -ErrorAction Stop
+            Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -Certificate (Get-SpoCertificate $s.certThumbprint) -TenantId $src.tenantId -ErrorAction Stop
             if ('onedrive' -in $Scope) {
                 foreach ($site in @(Get-SPOSite -IncludePersonalSite $true -Limit All -Filter "Url -like '-my.sharepoint.com/personal/'" -ErrorAction Stop)) {
                     Add-Item 'onedrive' ([string]$site.Url) ([string]$site.Owner) ([int64]$site.StorageUsageCurrent * 1MB) $null ([ordered]@{ owner = [string]$site.Owner })

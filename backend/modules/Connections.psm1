@@ -33,6 +33,25 @@ function Test-FieldConfigured {
     return ($Value -and ($script:Placeholders -notcontains $Value))
 }
 
+function Get-SpoCertificate {
+    <#
+    .SYNOPSIS
+        Loads a certificate from the store by thumbprint as an X509Certificate2 object.
+    .DESCRIPTION
+        Connect-SPOService -CertificateThumbprint has a broken store lookup ("No certificate
+        was found matching the specified parameters") even when the cert is present; passing
+        the certificate object via -Certificate works. This loads it (CurrentUser first, then
+        LocalMachine) for that purpose. Shared by all SPO connect paths.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Thumbprint)
+    foreach ($loc in 'CurrentUser', 'LocalMachine') {
+        $c = Get-Item "Cert:\$loc\My\$Thumbprint" -ErrorAction SilentlyContinue
+        if ($c) { return $c }
+    }
+    throw "Certificate '$Thumbprint' not found in CurrentUser\My or LocalMachine\My."
+}
+
 function New-ServiceResult {
     param(
         [Parameter(Mandatory)][string]$Service,
@@ -140,7 +159,7 @@ function Test-SpoConnection {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
         Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop
-        Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -CertificateThumbprint $s.certThumbprint -TenantId $Tenant.tenantId -ErrorAction Stop
+        Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -Certificate (Get-SpoCertificate $s.certThumbprint) -TenantId $Tenant.tenantId -ErrorAction Stop
         # Read-only connectivity proof.
         $tenantInfo = Get-SPOTenant -ErrorAction Stop
         $detail = if ($tenantInfo) { "admin=$($s.adminUrl)" } else { $null }
@@ -272,4 +291,4 @@ function Save-ConnectionConfig {
 
 Export-ModuleMember -Function `
     Test-GraphConnection, Test-ExoConnection, Test-SpoConnection, `
-    Get-ConnectionHealth, Get-ConnectionConfigSafe, Save-ConnectionConfig
+    Get-ConnectionHealth, Get-ConnectionConfigSafe, Save-ConnectionConfig, Get-SpoCertificate

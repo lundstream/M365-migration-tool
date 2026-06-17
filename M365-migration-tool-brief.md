@@ -148,6 +148,18 @@ Implement Monitor.psm1 + a live status view. Poll mailbox batch status (Get-Migr
 Implement Reporting.psm1 + reports UI. From SQLite + JSONL produce: per-run summary, per-user/per-site status, failures with reasons and the failing cmdlet, and a full audit trail of every mutating action (who/when/what, correlation IDs). Exportable as CSV and self-contained HTML. Add a final post-migration reconciliation report comparing intended mappings vs actual completed moves.
 ```
 
+## Phase 9 — Groups, backup and restore
+```
+How do we handle groups, can we migrate them and use same permissions on share point sites? Can we auto populate groups when users are created? How do we handle backup and restore before doing any migrations? Need backup/restore for: Mailboxes, onedrive, sharepoint sites. How do we handle shared mailboxes and permissions to those?
+```
+
+## Phase 10 — GUI, reporting part 2 and user manuals
+```
+Clean up GUI with a logical flow, starting with what to do first to the left and what to do last to the right. Maybe "step 1: x" with a under menu that have "step 1.1: y", "step 1.2: z" etc.
+A function to generate a PDF-report for the customer on what was done in the project when it's finnished and all migrations are done.
+Manuals in Swedish on what the end-users have to do to change tenant. (both for mac/windows and iPhone/android)
+```
+
 ---
 
 ## Suggested git checkpoints

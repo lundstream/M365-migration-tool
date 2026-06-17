@@ -51,7 +51,7 @@ function Connect-TenantSpo {
     param($Tenant)
     $s = $Tenant.sharePoint
     Import-Module Microsoft.Online.SharePoint.PowerShell -ErrorAction Stop
-    Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -CertificateThumbprint $s.certThumbprint -TenantId $Tenant.tenantId -ErrorAction Stop
+    Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -Certificate (Get-SpoCertificate $s.certThumbprint) -TenantId $Tenant.tenantId -ErrorAction Stop
 }
 
 function Assert-CmdletReady {
