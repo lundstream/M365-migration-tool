@@ -42,8 +42,7 @@ function Connect-Service {
         switch ($Service) {
             'Graph' {
                 if (-not (Test-SvcConfigured @($Tenant.tenantId, $Tenant.graph.appId, $Tenant.graph.certThumbprint))) { return @{ ok = $false; error = 'Graph not configured' } }
-                Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-                Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
+                Import-GraphModules
                 Connect-MgGraph -ClientId $Tenant.graph.appId -TenantId $Tenant.tenantId -CertificateThumbprint $Tenant.graph.certThumbprint -NoWelcome -ErrorAction Stop
             }
             'Exo' {

@@ -33,6 +33,24 @@ function Test-FieldConfigured {
     return ($Value -and ($script:Placeholders -notcontains $Value))
 }
 
+function Import-GraphModules {
+    <#
+    .SYNOPSIS
+        Imports the Microsoft.Graph SUB-modules needed by the tool, once per runspace.
+    .DESCRIPTION
+        The Graph PowerShell SDK throws "Microsoft.Graph.Authentication ... already loaded"
+        when Authentication is imported standalone and then a sub-module is imported in the
+        same runspace, or when sub-module versions disagree. Importing only the sub-modules
+        (which pull Authentication themselves, in the right load context) and keeping all
+        Graph modules on one version avoids the conflict. Connect-MgGraph / Get-MgContext
+        come along via the sub-modules.
+    #>
+    [CmdletBinding()] param()
+    foreach ($m in 'Microsoft.Graph.Users', 'Microsoft.Graph.Groups', 'Microsoft.Graph.Identity.DirectoryManagement') {
+        if (-not (Get-Module -Name $m)) { Import-Module $m -ErrorAction Stop }
+    }
+}
+
 function Get-SpoCertificate {
     <#
     .SYNOPSIS
@@ -94,7 +112,7 @@ function Test-GraphConnection {
 
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+        Import-GraphModules
         Connect-MgGraph -ClientId $g.appId -TenantId $Tenant.tenantId -CertificateThumbprint $g.certThumbprint -NoWelcome -ErrorAction Stop
         $ctx = Get-MgContext
         $identity = if ($ctx.AppName) { "$($ctx.AppName) ($($ctx.ClientId))" } else { $ctx.ClientId }
@@ -291,4 +309,4 @@ function Save-ConnectionConfig {
 
 Export-ModuleMember -Function `
     Test-GraphConnection, Test-ExoConnection, Test-SpoConnection, `
-    Get-ConnectionHealth, Get-ConnectionConfigSafe, Save-ConnectionConfig, Get-SpoCertificate
+    Get-ConnectionHealth, Get-ConnectionConfigSafe, Save-ConnectionConfig, Get-SpoCertificate, Import-GraphModules

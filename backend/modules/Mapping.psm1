@@ -56,8 +56,7 @@ function Get-DirectoryUsers {
     }
 
     try {
-        Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-        Import-Module Microsoft.Graph.Users -ErrorAction Stop
+        Import-GraphModules
         Connect-MgGraph -ClientId $t.graph.appId -TenantId $t.tenantId -CertificateThumbprint $t.graph.certThumbprint -NoWelcome -ErrorAction Stop
 
         $users = Get-MgUser -All -Property 'id,userPrincipalName,displayName,mail,proxyAddresses,accountEnabled' -ErrorAction Stop

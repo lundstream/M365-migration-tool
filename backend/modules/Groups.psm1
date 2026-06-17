@@ -21,8 +21,7 @@ function Test-GraphConfigured { param($T) $g = $T.graph; return (($script:Placeh
 
 function Connect-TenantGraph {
     param($Tenant)
-    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-    Import-Module Microsoft.Graph.Groups -ErrorAction Stop
+    Import-GraphModules
     Connect-MgGraph -ClientId $Tenant.graph.appId -TenantId $Tenant.tenantId -CertificateThumbprint $Tenant.graph.certThumbprint -NoWelcome -ErrorAction Stop
 }
 function Disconnect-Graph { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { } }

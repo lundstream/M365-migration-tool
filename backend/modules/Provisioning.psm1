@@ -51,9 +51,7 @@ function Test-ExoConfigured {
 
 function Connect-TenantGraph {
     param($Tenant)
-    Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
-    Import-Module Microsoft.Graph.Users -ErrorAction Stop
-    Import-Module Microsoft.Graph.Identity.DirectoryManagement -ErrorAction Stop
+    Import-GraphModules
     Connect-MgGraph -ClientId $Tenant.graph.appId -TenantId $Tenant.tenantId -CertificateThumbprint $Tenant.graph.certThumbprint -NoWelcome -ErrorAction Stop
 }
 function Connect-TenantExo {
@@ -246,7 +244,6 @@ function Invoke-Provisioning {
                     # Optional: add the new user to mapped target groups (Phase 9).
                     if ($AddToGroups) {
                         try {
-                            Import-Module Microsoft.Graph.Groups -ErrorAction Stop
                             $newId = (Get-MgUser -UserId $row.newUpn -Property id -ErrorAction Stop).Id
                             $tg = Invoke-DbQuery -Query @'
 SELECT g.target_group_id FROM group_members gm
