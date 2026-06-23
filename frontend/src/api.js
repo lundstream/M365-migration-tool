@@ -88,6 +88,11 @@ export const api = {
   fileMoveRefresh: (id) => request(`/api/file-move/jobs/${id}/refresh`, { method: 'POST' }),
   fileMoveStop: (id) => request(`/api/file-move/jobs/${id}/stop`, { method: 'POST' }),
 
+  // Copy-based mailbox migration (Graph)
+  mailboxCopyJobs: () => request('/api/mailbox-copy/jobs'),
+  mailboxCopyJob: (id) => request(`/api/mailbox-copy/jobs/${id}`),
+  mailboxCopyStart: (sourceUpn, targetUpn, scope) => request('/api/mailbox-copy/start', { method: 'POST', body: JSON.stringify({ sourceUpn, targetUpn, scope, confirm: true }) }),
+
   // Phase 5 — mailbox batches
   mailboxBatches: () => request('/api/mailbox/batches'),
   mailboxBatch: (id) => request(`/api/mailbox/batches/${id}`),

@@ -7,6 +7,7 @@ import { Provisioning } from './components/Provisioning'
 import { Preflight } from './components/Preflight'
 import { MigrationSetup } from './components/MigrationSetup'
 import { MailboxMove } from './components/MailboxMove'
+import { MailboxCopy } from './components/MailboxCopy'
 import { FileMove } from './components/FileMove'
 import { Monitor } from './components/Monitor'
 import { Reports } from './components/Reports'
@@ -35,7 +36,8 @@ const STEPS = [
     { id: 'preflight', label: 'Preflight', el: <Preflight /> },
   ] },
   { label: 'Migrate', children: [
-    { id: 'mailbox-move', label: 'Mailbox moves', el: <MailboxMove /> },
+    { id: 'mailbox-copy', label: 'Mailbox copy (Graph)', el: <MailboxCopy /> },
+    { id: 'mailbox-move', label: 'Mailbox moves (native)', el: <MailboxMove /> },
     { id: 'permissions', label: 'Shared mbx permissions', el: <Permissions /> },
     { id: 'file-move', label: 'OneDrive / SharePoint', el: <FileMove /> },
   ] },
