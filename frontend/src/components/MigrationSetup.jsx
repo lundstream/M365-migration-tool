@@ -34,8 +34,9 @@ export function MigrationSetup() {
 
   async function create(item) {
     const ok = window.confirm(
-      `Create "${LABELS[item]}" in the target tenant?\n\n` +
-      `This MUTATES the tenant. A state snapshot is written first; if it already exists it is left unchanged.\nProceed?`
+      `Run "${LABELS[item]}" setup?\n\n` +
+      `This MUTATES the tenant(s). A state snapshot is written first. The SPO relationship is ` +
+      `(re-)established on both tenants; the endpoint/org-relationship are left unchanged if they already exist.\nProceed?`
     )
     if (!ok) return
     setBusy(item); setError(null); setLastResult(null)
@@ -86,9 +87,9 @@ export function MigrationSetup() {
             </div>
             <div className="muted small mono" style={{ margin: '0.4rem 0' }}>{it.name}</div>
             <p className="muted small">{it.detail}</p>
-            {(it.status === 'missing') && (
+            {(it.status === 'missing' || it.status === 'present') && (
               <button className="btn primary" disabled={!!busy} onClick={() => create(it.item)}>
-                {busy === it.item ? 'Creating…' : 'Create'}
+                {busy === it.item ? 'Working…' : (it.status === 'missing' ? 'Create' : 'Re-run / re-establish')}
               </button>
             )}
           </div>
