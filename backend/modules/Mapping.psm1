@@ -217,8 +217,12 @@ function Invoke-AutoMatch {
     }
 
     foreach ($d in $decisions) {
+        # $d.target is $null for unmatched/conflict rows; read its fields safely (StrictMode).
+        $tUpn = if ($d.target) { $d.target.upn } else { $null }
+        $tId = if ($d.target) { $d.target.user_id } else { $null }
+        $tDn = if ($d.target) { $d.target.display_name } else { $null }
         Save-Mapping -SourceUpn $d.source.upn -SourceId $d.source.user_id -SourceDisplay $d.source.display_name `
-            -TargetUpn ($d.target.upn) -TargetId ($d.target.user_id) -TargetDisplay ($d.target.display_name) `
+            -TargetUpn $tUpn -TargetId $tId -TargetDisplay $tDn `
             -TargetExists ([int][bool]$d.target) -State $d.state -Method $d.method -Notes $null
     }
 
