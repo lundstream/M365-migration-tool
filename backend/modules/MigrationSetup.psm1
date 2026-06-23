@@ -221,7 +221,14 @@ function Invoke-CreateMigrationEndpoint {
         return New-Item-Result 'endpoint' $name 'failed' 'Migration app not configured: config.migration.migrationAppId is still a placeholder. Register the cross-tenant migration app (in target, consented in source) and set migrationAppId before creating the endpoint.'
     }
     $params = if ($Config.migration.endpointParameters) { ConvertTo-Splat $Config.migration.endpointParameters }
-              else { @{ Name = $name; RemoteTenant = $sourceDomain; ApplicationId = $Config.migration.migrationAppId } }
+              else {
+                  $p = @{ Name = $name; RemoteTenant = $sourceDomain; ApplicationId = $Config.migration.migrationAppId }
+                  # Cross-tenant endpoints reference the app secret via an Azure Key Vault URL.
+                  if ($Config.migration.PSObject.Properties.Name -contains 'appSecretKeyVaultUrl' -and $Config.migration.appSecretKeyVaultUrl) {
+                      $p.AppSecretKeyVaultUrl = $Config.migration.appSecretKeyVaultUrl
+                  }
+                  $p
+              }
 
     try {
         Connect-TenantExo -Tenant $tgt
