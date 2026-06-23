@@ -4,7 +4,7 @@
 const ARRAY_KEYS = new Set([
   'rows', 'users', 'batches', 'jobs', 'groups', 'permissions', 'mailboxes', 'items', 'plan',
   'results', 'tenants', 'services', 'mailboxBatches', 'fileMoves', 'manifests', 'columns',
-  'domains', 'notReady',
+  'domains', 'notReady', 'skus', 'sites',
 ])
 function normalizeArrays(node) {
   if (Array.isArray(node)) { node.forEach(normalizeArrays); return node }
