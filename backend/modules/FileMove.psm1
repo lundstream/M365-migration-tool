@@ -39,6 +39,19 @@ function Connect-TenantSpo {
     Connect-SPOService -Url $s.adminUrl -ClientId $s.appId -Certificate (Get-SpoCertificate $s.certThumbprint) -TenantId $Tenant.tenantId -ErrorAction Stop
 }
 function Disconnect-Spo { try { Disconnect-SPOService -ErrorAction SilentlyContinue | Out-Null } catch { } }
+function Connect-TenantGraph {
+    param($Tenant)
+    Import-GraphModules   # exported from Connections.psm1 (avoids the Graph assembly-load conflict)
+    Connect-MgGraph -ClientId $Tenant.graph.appId -TenantId $Tenant.tenantId -CertificateThumbprint $Tenant.graph.certThumbprint -NoWelcome -ErrorAction Stop
+}
+function Assert-CmdletReady {
+    param([string]$Name, [string[]]$RequiredParameters = @())
+    $cmd = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $cmd) { throw "Cmdlet '$Name' not available (not connected?). Verify before use (guardrail #4)." }
+    $missing = @($RequiredParameters | Where-Object { $_ -notin @($cmd.Parameters.Keys) })
+    if ($missing.Count -gt 0) { throw "Cmdlet '$Name' missing parameter(s): $($missing -join ', ') (guardrail #4)." }
+}
+function Disconnect-Graph { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { } }
 
 function ConvertTo-MoveStatus {
     param([string]$State)
@@ -69,7 +82,12 @@ function Get-PartnerTargetHostUrl {
     if (-not (Test-SpoConfigured $tgt)) { throw 'SharePoint is not configured for the target tenant.' }
     try {
         Connect-TenantSpo -Tenant $tgt
-        return ([string](Get-SPOCrossTenantHostUrl -ErrorAction Stop)).Trim()
+        # Get-SPOCrossTenantHostUrl returns a verbose multi-line blob; extract the bare URL
+        # (the -my MySiteHost root, e.g. https://reformeaorg-my.sharepoint.com).
+        $raw = [string](Get-SPOCrossTenantHostUrl -ErrorAction Stop)
+        $m = [regex]::Match($raw, 'https?://[^\s/]+\.sharepoint\.com')
+        if (-not $m.Success) { throw "Could not parse cross-tenant host URL from: $raw" }
+        return $m.Value
     }
     finally { Disconnect-Spo }
 }
@@ -115,12 +133,113 @@ function Get-DerivedTargetUrl {
     return ((Get-TargetSiteRoot -Config $Config).TrimEnd('/') + $path)
 }
 
+function Get-SiteAlias {
+    # Group alias / mailNickname from the site URL (segment after /sites/).
+    param([string]$Url)
+    return (([uri]$Url).AbsolutePath.TrimEnd('/') -split '/')[-1]
+}
+
+function Invoke-SiteMigration {
+    <#
+    .SYNOPSIS
+        End-to-end site migration for a picked source site: provision the target, validate,
+        then migrate. Group-connected sites use the group engine (target M365 group created
+        first); plain sites use the site engine.
+    .PARAMETER Action
+        provision | validate | migrate. provision + migrate are gated mutations.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Config, [Parameter(Mandatory)][string]$RunId,
+        [Parameter(Mandatory)][string]$SourceUrl,
+        [Parameter(Mandatory)][ValidateSet('provision', 'validate', 'migrate')][string]$Action,
+        [datetime]$PreferredBegin, [datetime]$PreferredEnd
+    )
+    $src = $Config.tenants.source
+    if (-not (Test-SpoConfigured $src)) { throw 'SharePoint is not configured for the source tenant.' }
+
+    # Source site facts.
+    $template = $null; $title = $null
+    try {
+        Connect-TenantSpo -Tenant $src
+        $site = Get-SPOSite -Identity $SourceUrl -ErrorAction Stop
+        $template = [string]$site.Template; $title = [string]$site.Title
+    }
+    finally { Disconnect-Spo }
+    $isGroup = $template -like 'GROUP*'
+    $alias = Get-SiteAlias $SourceUrl
+    $targetUrl = Get-DerivedTargetUrl -Config $Config -SourceUrl $SourceUrl
+    $targetHost = Get-PartnerTargetHostUrl -Config $Config
+
+    # ---- provision the target ----
+    if ($Action -eq 'provision') {
+        if ($isGroup) {
+            try {
+                Connect-TenantGraph -Tenant $Config.tenants.target
+                $existing = @(Get-MgGroup -Filter "mailNickname eq '$alias'" -ErrorAction Stop)
+                if (@($existing).Count -gt 0) { return @{ ok = $true; provisioned = $false; isGroup = $true; targetUrl = $targetUrl; detail = "Target group '$alias' already exists." } }
+                Add-AuditEntry -RunId $RunId -CorrelationId (New-CorrelationId) -Action 'filemove.group.provision' -Target $alias -Detail "Create target M365 group for $SourceUrl"
+                New-MgGroup -DisplayName $title -MailNickname $alias -GroupTypes @('Unified') -MailEnabled:$true -SecurityEnabled:$false -ErrorAction Stop | Out-Null
+                return @{ ok = $true; provisioned = $true; isGroup = $true; targetUrl = $targetUrl; detail = "Created target M365 group '$alias'. Its SharePoint site provisions within a few minutes — wait before validating." }
+            }
+            catch { return @{ ok = $false; isGroup = $true; error = $_.Exception.Message } }
+            finally { Disconnect-Graph }
+        }
+        else {
+            return @{ ok = $false; isGroup = $false; error = 'Auto-provisioning of non-group sites is not implemented yet (needs owner + template). Create the target site manually, then Validate.' }
+        }
+    }
+
+    # ---- validate / migrate (run on the SOURCE SPO connection) ----
+    $force = ($Action -eq 'migrate')
+    $cmd = if ($isGroup) {
+        @{ name = 'Start-SPOCrossTenantGroupContentMove'; src = 'SourceGroupAlias'; tgt = 'TargetGroupAlias'; srcVal = $alias; tgtVal = $alias; jobType = 'group'; jobSrc = $alias; jobTgt = $alias }
+    }
+    else {
+        @{ name = 'Start-SPOCrossTenantSiteContentMove'; src = 'SourceSiteUrl'; tgt = 'TargetSiteUrl'; srcVal = $SourceUrl; tgtVal = $targetUrl; jobType = 'site'; jobSrc = $SourceUrl; jobTgt = $targetUrl }
+    }
+
+    if ($force) {
+        $dup = @(Invoke-DbQuery -Query 'SELECT job_id FROM file_move_jobs WHERE type=@t AND source=@s;' -SqlParameters @{ t = $cmd.jobType; s = $cmd.jobSrc }) | Select-Object -First 1
+        if ($dup) { throw "A $($cmd.jobType) move already exists for '$($cmd.jobSrc)'. Cross-tenant moves cannot be re-run incrementally." }
+    }
+
+    try {
+        Connect-TenantSpo -Tenant $src
+        $params = @{ $cmd.src = $cmd.srcVal; $cmd.tgt = $cmd.tgtVal; TargetCrossTenantHostUrl = $targetHost }
+        if ($PSBoundParameters.ContainsKey('PreferredBegin')) { $params.PreferredMoveBeginDate = $PreferredBegin }
+        if ($PSBoundParameters.ContainsKey('PreferredEnd')) { $params.PreferredMoveEndDate = $PreferredEnd }
+        if ($force) { $params.Force = $true } else { $params.ValidationOnly = $true }
+        Assert-CmdletReady -Name $cmd.name -RequiredParameters @($params.Keys)
+
+        if ($force) {
+            Write-FileMoveSnapshot -Tag "sitemigrate-$($cmd.jobType)-$alias" -Data @{ source = $cmd.jobSrc; target = $cmd.jobTgt; isGroup = $isGroup; targetHost = $targetHost }
+            Add-AuditEntry -RunId $RunId -CorrelationId (New-CorrelationId) -Action "filemove.$($cmd.jobType).start" -Target $cmd.jobSrc -Detail "-> $($cmd.jobTgt) (one-and-done)"
+        }
+        $result = & $cmd.name @params -ErrorAction Stop
+
+        if ($force) {
+            $jobId = 'fm-{0}-{1}' -f ([DateTime]::UtcNow.ToString('yyyyMMddHHmmss')), ([guid]::NewGuid().ToString('N').Substring(0, 4))
+            $now = [DateTime]::UtcNow.ToString('o')
+            Invoke-DbQuery -Query @'
+INSERT INTO file_move_jobs (job_id, type, source, target, target_host_url, status, correlation_id, created_utc, updated_utc, notes)
+VALUES (@id, @type, @src, @tgt, @host, 'scheduled', @corr, @t, @t, 'One-and-done cross-tenant move.');
+'@ -SqlParameters @{ id = $jobId; type = $cmd.jobType; src = $cmd.jobSrc; tgt = $cmd.jobTgt; host = $targetHost; corr = (New-CorrelationId); t = $now } | Out-Null
+            return @{ ok = $true; action = 'migrate'; isGroup = $isGroup; jobId = $jobId; detail = "Move started for '$($cmd.jobSrc)'." }
+        }
+        return @{ ok = $true; action = 'validate'; isGroup = $isGroup; detail = (($result | Out-String).Trim()) }
+    }
+    catch { return @{ ok = $false; action = $Action; isGroup = $isGroup; error = $_.Exception.Message } }
+    finally { Disconnect-Spo }
+}
+
 # Per-type cmdlet names + identity parameter mapping.
 function Get-MoveCmdlets {
     param([string]$Type)
     switch ($Type) {
         'onedrive' { return @{ start = 'Start-SPOCrossTenantUserContentMove'; state = 'Get-SPOCrossTenantUserContentMoveState'; stop = 'Stop-SPOCrossTenantUserContentMove'; srcParam = 'SourceUserPrincipalName'; tgtParam = 'TargetUserPrincipalName' } }
         'site'     { return @{ start = 'Start-SPOCrossTenantSiteContentMove'; state = 'Get-SPOCrossTenantSiteContentMoveState'; stop = 'Stop-SPOCrossTenantSiteContentMove'; srcParam = 'SourceSiteUrl'; tgtParam = 'TargetSiteUrl' } }
+        'group'    { return @{ start = 'Start-SPOCrossTenantGroupContentMove'; state = 'Get-SPOCrossTenantGroupContentMoveState'; stop = 'Stop-SPOCrossTenantGroupContentMove'; srcParam = 'SourceGroupAlias'; tgtParam = 'TargetGroupAlias' } }
         default    { throw "Unknown move type '$Type'." }
     }
 }
@@ -269,4 +388,4 @@ function ConvertFrom-JobRow {
 
 Export-ModuleMember -Function `
     Test-FileMove, Start-FileMove, Update-FileMoveState, Stop-FileMove, `
-    Get-FileMoveJobs, Get-FileMoveJob, Get-SourceSites, Get-DerivedTargetUrl
+    Get-FileMoveJobs, Get-FileMoveJob, Get-SourceSites, Get-DerivedTargetUrl, Invoke-SiteMigration

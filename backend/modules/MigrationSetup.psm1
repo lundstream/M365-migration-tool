@@ -238,11 +238,11 @@ function Invoke-SetSpoRelationship {
     try {
         # Each tenant's own host URL.
         Connect-TenantSpo -Tenant $src
-        $srcHost = (Get-SPOCrossTenantHostUrl -ErrorAction Stop)
+        $srcHost = [regex]::Match([string](Get-SPOCrossTenantHostUrl -ErrorAction Stop), 'https?://[^\s/]+\.sharepoint\.com').Value
         try { Disconnect-SPOService -ErrorAction SilentlyContinue | Out-Null } catch { }
 
         Connect-TenantSpo -Tenant $tgt
-        $tgtHost = (Get-SPOCrossTenantHostUrl -ErrorAction Stop)
+        $tgtHost = [regex]::Match([string](Get-SPOCrossTenantHostUrl -ErrorAction Stop), 'https?://[^\s/]+\.sharepoint\.com').Value
 
         Assert-CmdletReady -Name 'Set-SPOCrossTenantRelationship' -RequiredParameters @('Scenario', 'PartnerRole', 'PartnerCrossTenantHostUrl')
         Write-SetupSnapshot -RunId $RunId -Item 'spoRelationship' -Data @{ action = 'Set-SPOCrossTenantRelationship'; scenario = $scenario; targetPartner = 'Source'; sourcePartner = 'Target' }

@@ -19,6 +19,7 @@ export function FileMove() {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [sourceSites, setSourceSites] = useState(null)
+  const [siteResult, setSiteResult] = useState(null)
 
   async function loadSourceSites() {
     setBusy('sites'); setError(null)
@@ -27,7 +28,23 @@ export function FileMove() {
   }
   function pickSite(s) {
     setSitePairs([{ source: s.url, target: s.targetUrl }])
-    setValidation(null)
+    setValidation(null); setSiteResult(null)
+  }
+  async function siteAction(action) {
+    const sourceUrl = sitePairs[0]?.source
+    if (!sourceUrl) { setError('Pick a source site first.'); return }
+    if (action === 'provision' && !window.confirm(`Create the target in Reformea for:\n${sourceUrl}?`)) return
+    if (action === 'migrate' && !window.confirm(
+      `Start the cross-tenant move of:\n${sourceUrl}\n\nONE-AND-DONE — no re-runs. Source goes read-only during the move and is redirected after.\nProceed?`)) return
+    setBusy(action); setError(null); setSiteResult(null)
+    try {
+      const body = { sourceUrl, action, confirm: true }
+      if (begin) body.preferredBegin = new Date(begin).toISOString()
+      if (end) body.preferredEnd = new Date(end).toISOString()
+      const r = await api.fileMoveSiteMigrate(body)
+      setSiteResult(r)
+      if (action === 'migrate' && r.ok) await loadJobs()
+    } catch (e) { setError(String(e)) } finally { setBusy(null) }
   }
 
   async function loadJobs() {
@@ -172,6 +189,23 @@ export function FileMove() {
               migration path (target M365 group created first) — plain site move may be rejected
               at validation. Validate first to see.
             </p>
+          )}
+
+          {/* Three-step flow for the picked site */}
+          {sitePairs[0]?.source && (
+            <div style={{ margin: '0.5rem 0' }}>
+              <div className="btn-row">
+                <button className="btn" disabled={!!busy} onClick={() => siteAction('provision')}>{busy === 'provision' ? '…' : '1 · Provision target'}</button>
+                <button className="btn" disabled={!!busy} onClick={() => siteAction('validate')}>{busy === 'validate' ? '…' : '2 · Validate'}</button>
+                <button className="btn primary" disabled={!!busy} onClick={() => siteAction('migrate')}>{busy === 'migrate' ? '…' : '3 · Migrate'}</button>
+              </div>
+              {siteResult && (
+                <p className={siteResult.ok ? 'muted small' : 'error'}>
+                  {siteResult.detail ?? siteResult.error}
+                </p>
+              )}
+              <p className="muted small">Group sites: Provision creates the target M365 group, then Validate, then Migrate. Wait a few minutes after Provision for the target site to come up.</p>
+            </div>
           )}
 
           {/* Manual / selected pairs */}

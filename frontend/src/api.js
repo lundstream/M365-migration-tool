@@ -80,6 +80,7 @@ export const api = {
   // Phase 6 — file moves (OneDrive + SharePoint)
   fileMoveJobs: () => request('/api/file-move/jobs'),
   fileMoveSourceSites: () => request('/api/file-move/sites/source'),
+  fileMoveSiteMigrate: (body) => request('/api/file-move/site-migrate', { method: 'POST', body: JSON.stringify(body) }),
   fileMoveValidate: (type, source, target) => request('/api/file-move/validate', { method: 'POST', body: JSON.stringify({ type, source, target }) }),
   fileMoveStart: (body) => request('/api/file-move/start', { method: 'POST', body: JSON.stringify({ ...body, confirm: true }) }),
   fileMoveRefresh: (id) => request(`/api/file-move/jobs/${id}/refresh`, { method: 'POST' }),

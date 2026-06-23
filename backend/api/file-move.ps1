@@ -21,6 +21,23 @@ Add-PodeRoute -Method Get -Path '/api/file-move/sites/source' -ArgumentList $boo
     catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message } -StatusCode 400 }
 }
 
+# POST /api/file-move/site-migrate — picked-site flow. Body: { sourceUrl, action, confirm?, preferredBegin?, preferredEnd? }
+# action = provision | validate | migrate (provision + migrate require confirm).
+Add-PodeRoute -Method Post -Path '/api/file-move/site-migrate' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $d = $WebEvent.Data
+    if ($d.action -in @('provision', 'migrate') -and -not $d.confirm) {
+        Write-PodeJsonResponse -Value @{ error = 'This action mutates the target — confirm required.' } -StatusCode 400; return
+    }
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    $runId = New-RunId; New-Run -RunId $runId -Kind 'site-migrate' -Notes "$($d.action) $($d.sourceUrl)" | Out-Null
+    $p = @{ Config = $config; RunId = $runId; SourceUrl = $d.sourceUrl; Action = $d.action }
+    if ($d.preferredBegin) { $p.PreferredBegin = [datetime]$d.preferredBegin }
+    if ($d.preferredEnd) { $p.PreferredEnd = [datetime]$d.preferredEnd }
+    try { Write-PodeJsonResponse -Value (Invoke-SiteMigration @p) -Depth 12 }
+    catch { Write-PodeJsonResponse -Value @{ ok = $false; error = $_.Exception.Message; runId = $runId } -StatusCode 400 }
+}
+
 # POST /api/file-move/validate — read-only pre-move validation. Body: { type, source, target }
 Add-PodeRoute -Method Post -Path '/api/file-move/validate' -ArgumentList $bootstrap -ScriptBlock {
     param($bootstrap); . $bootstrap
