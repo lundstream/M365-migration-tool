@@ -124,11 +124,15 @@ function Save-MigrationConfig {
     if (-not ($config.PSObject.Properties.Name -contains 'migration') -or -not $config.migration) {
         $config | Add-Member -NotePropertyName 'migration' -NotePropertyValue ([pscustomobject]@{}) -Force
     }
+    # $Update may be a hashtable (Pode JSON body) or a PSCustomObject — handle both.
+    $isDict = $Update -is [System.Collections.IDictionary]
+    $keys = if ($isDict) { @($Update.Keys) } else { @($Update.PSObject.Properties.Name) }
     foreach ($f in $script:MigrationFields) {
-        if (($Update.PSObject.Properties.Name -contains $f) -and ($null -ne $Update.$f)) {
-            if ($config.migration.PSObject.Properties.Name -contains $f) { $config.migration.$f = $Update.$f }
-            else { $config.migration | Add-Member -NotePropertyName $f -NotePropertyValue $Update.$f -Force }
-        }
+        if ($keys -notcontains $f) { continue }
+        $val = if ($isDict) { $Update[$f] } else { $Update.$f }
+        if ($null -eq $val) { continue }
+        if ($config.migration.PSObject.Properties.Name -contains $f) { $config.migration.$f = $val }
+        else { $config.migration | Add-Member -NotePropertyName $f -NotePropertyValue $val -Force }
     }
     ($config | ConvertTo-Json -Depth 12) | Set-Content -LiteralPath $ConfigPath -Encoding utf8
     return (Get-MigrationConfigView -Config $config)
