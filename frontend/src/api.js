@@ -52,6 +52,8 @@ export const api = {
   provisioningDomains: () => request('/api/provisioning/domains'),
   provisioningPreview: (body) => request('/api/provisioning/preview', { method: 'POST', body: JSON.stringify(body) }),
   provisioningExecute: (body) => request('/api/provisioning/execute', { method: 'POST', body: JSON.stringify(body) }),
+  provisioningSkus: () => request('/api/provisioning/skus'),
+  provisioningExecuteLicensed: (body) => request('/api/provisioning/execute-licensed', { method: 'POST', body: JSON.stringify(body) }),
   provisioningLatest: () => request('/api/provisioning/latest'),
 
   // Phase 4 — migration setup

@@ -60,6 +60,38 @@ Add-PodeRoute -Method Post -Path '/api/provisioning/execute' -ArgumentList $boot
     }
 }
 
+# GET /api/provisioning/skus — target subscribed licences (for licensed-user provisioning).
+Add-PodeRoute -Method Get -Path '/api/provisioning/skus' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    try {
+        $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+        Write-PodeJsonResponse -Value @{ skus = (Get-TargetSkus -Config $config) } -Depth 8
+    }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message } -StatusCode 400 }
+}
+
+# POST /api/provisioning/execute-licensed — GATED: create LICENSED target users (copy-based).
+Add-PodeRoute -Method Post -Path '/api/provisioning/execute-licensed' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    $d = $WebEvent.Data
+    if (-not $d.confirm) { Write-PodeJsonResponse -Value @{ error = 'Missing explicit confirmation.' } -StatusCode 400; return }
+    if (-not $d.skuId) { Write-PodeJsonResponse -Value @{ error = 'A licence (skuId) is required.' } -StatusCode 400; return }
+    $runId = New-RunId
+    New-Run -RunId $runId -Kind 'provisioning-licensed' -Notes "Create licensed users on $($d.targetDomain)" | Out-Null
+    try {
+        $forceChange = $true; if ($null -ne $d.forceChange) { $forceChange = [bool]$d.forceChange }
+        $replace = $false; if ($null -ne $d.replaceUnlicensed) { $replace = [bool]$d.replaceUnlicensed }
+        $result = Invoke-LicensedProvisioning -Config $config -RunId $runId `
+            -SourceUpns @($d.sourceUpns) -TargetDomain $d.targetDomain -SkuId $d.skuId `
+            -PasswordMode $d.passwordMode -SharedPassword $d.sharedPassword `
+            -ForceChange $forceChange -ReplaceUnlicensed $replace
+        Write-JsonLog -RunId $runId -Level Information -Message 'Licensed provisioning complete' -Data @{ created = $result.created; skipped = $result.skipped; failed = $result.failed }
+        Write-PodeJsonResponse -Value $result -Depth 12
+    }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message; runId = $runId } -StatusCode 500 }
+}
+
 # GET /api/provisioning/latest — last run summary (NO passwords).
 Add-PodeRoute -Method Get -Path '/api/provisioning/latest' -ArgumentList $bootstrap -ScriptBlock {
     param($bootstrap); . $bootstrap

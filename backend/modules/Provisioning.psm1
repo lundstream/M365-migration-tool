@@ -325,4 +325,117 @@ function Get-ProvisioningRun {
     }
 }
 
-Export-ModuleMember -Function Get-TargetDomains, Build-ProvisioningPlan, Invoke-Provisioning, Get-ProvisioningRun
+function Get-TargetSkus {
+    <#
+    .SYNOPSIS
+        Lists the target tenant's subscribed licences (for the licensed-user provisioning picker).
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)] $Config)
+    $t = $Config.tenants.target
+    if (-not (Test-GraphConfigured $t)) { throw 'Graph is not configured for the target tenant.' }
+    try {
+        Connect-TenantGraph -Tenant $t
+        $skus = Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/subscribedSkus'
+        return @($skus.value | ForEach-Object {
+                [ordered]@{
+                    skuId      = [string]$_.skuId
+                    partNumber = [string]$_.skuPartNumber
+                    enabled    = [int]$_.prepaidUnits.enabled
+                    consumed   = [int]$_.consumedUnits
+                    available  = ([int]$_.prepaidUnits.enabled - [int]$_.consumedUnits)
+                }
+            })
+    }
+    finally { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { } }
+}
+
+function Invoke-LicensedProvisioning {
+    <#
+    .SYNOPSIS
+        GATED: creates LICENSED target users (real mailboxes) from selected source users — the
+        correct target for copy-based migration. Optionally replaces placeholder MailUsers.
+        Returns one-time passwords in-memory (never stored/logged).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Config, [Parameter(Mandatory)][string]$RunId,
+        [Parameter(Mandatory)][string[]]$SourceUpns, [Parameter(Mandatory)][string]$TargetDomain,
+        [Parameter(Mandatory)][string]$SkuId,
+        [ValidateSet('random', 'shared')][string]$PasswordMode = 'random', [string]$SharedPassword,
+        [bool]$ForceChange = $true, [bool]$ReplaceUnlicensed = $false, [string]$DefaultUsageLocation = 'SE'
+    )
+    $src = $Config.tenants.source; $tgt = $Config.tenants.target
+    if (-not (Test-GraphConfigured $src) -or -not (Test-GraphConfigured $tgt)) { throw 'Graph is not configured for both tenants.' }
+    if ($PasswordMode -eq 'shared' -and [string]::IsNullOrWhiteSpace($SharedPassword)) { throw 'Shared password mode selected but no password provided.' }
+
+    # Pull source attributes.
+    $details = @{}
+    try {
+        Connect-TenantGraph -Tenant $src
+        foreach ($upn in $SourceUpns) {
+            try { $details[$upn] = Get-MgUser -UserId $upn -Property ($script:SourceProps -join ',') -ErrorAction Stop } catch { $details[$upn] = $null }
+        }
+    }
+    finally { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { } }
+
+    $results = [System.Collections.Generic.List[object]]::new()
+    $now = [DateTime]::UtcNow.ToString('o')
+    try {
+        Connect-TenantGraph -Tenant $tgt
+        foreach ($upn in $SourceUpns) {
+            $d = $details[$upn]
+            $newUpn = '{0}@{1}' -f (Get-LocalPart $upn), $TargetDomain
+            $corr = New-CorrelationId
+            $res = [ordered]@{ sourceUpn = $upn; targetUpn = $newUpn; status = $null; reason = $null; password = $null }
+            if (-not $d) { $res.status = 'skipped'; $res.reason = 'Source user not found'; $results.Add($res); continue }
+
+            # Detect existing target user.
+            $existing = $null
+            try { $existing = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$newUpn`?`$select=id,assignedLicenses" } catch { $existing = $null }
+            if ($existing) {
+                $licCount = @($existing.assignedLicenses).Count
+                if ($licCount -gt 0) { $res.status = 'skipped'; $res.reason = 'Target already exists and is licensed'; $results.Add($res); continue }
+                if (-not $ReplaceUnlicensed) { $res.status = 'skipped'; $res.reason = 'Target exists but unlicensed (likely a MailUser) — enable "replace" to convert'; $results.Add($res); continue }
+                try { Invoke-MgGraphRequest -Method DELETE -Uri "https://graph.microsoft.com/v1.0/users/$($existing.id)" | Out-Null; Start-Sleep -Seconds 2 }
+                catch { $res.status = 'failed'; $res.reason = "Could not remove existing object: $($_.Exception.Message)"; $results.Add($res); continue }
+            }
+
+            $pw = if ($PasswordMode -eq 'shared') { $SharedPassword } else { New-StrongPassword }
+            try {
+                $body = @{
+                    accountEnabled    = $true
+                    displayName       = ($d.DisplayName ?? (Get-LocalPart $upn))
+                    mailNickname      = (Get-LocalPart $upn)
+                    userPrincipalName = $newUpn
+                    givenName         = $d.GivenName
+                    surname           = $d.Surname
+                    jobTitle          = $d.JobTitle
+                    department        = $d.Department
+                    companyName       = $d.CompanyName
+                    usageLocation     = ($d.UsageLocation ?? $DefaultUsageLocation)
+                    passwordProfile   = @{ password = $pw; forceChangePasswordNextSignIn = $ForceChange }
+                }
+                $created = Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/users' -Body ($body | ConvertTo-Json -Depth 6) -ContentType 'application/json'
+                # Assign the licence (provisions the mailbox).
+                $lic = @{ addLicenses = @(@{ skuId = $SkuId; disabledPlans = @() }); removeLicenses = @() }
+                Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$($created.id)/assignLicense" -Body ($lic | ConvertTo-Json -Depth 5) -ContentType 'application/json' | Out-Null
+                Add-AuditEntry -RunId $RunId -CorrelationId $corr -Action 'provisioning.licensed.create' -Target $newUpn -Detail "licensed user; sku=$SkuId; source=$upn"
+                $res.status = 'created'; $res.password = $pw
+            }
+            catch { $res.status = 'failed'; $res.reason = $_.Exception.Message }
+            $results.Add($res)
+            Invoke-DbQuery -Query 'INSERT INTO provisioning_results (run_id, source_upn, target_upn, status, reason, created_utc) VALUES (@r,@s,@t,@st,@rn,@u);' `
+                -SqlParameters @{ r = $RunId; s = $upn; t = $newUpn; st = $res.status; rn = $res.reason; u = $now } | Out-Null
+        }
+    }
+    finally { try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch { } }
+
+    $created = @($results | Where-Object { $_.status -eq 'created' }).Count
+    $skipped = @($results | Where-Object { $_.status -eq 'skipped' }).Count
+    $failed = @($results | Where-Object { $_.status -eq 'failed' }).Count
+    Invoke-DbQuery -Query 'INSERT INTO provisioning_runs (run_id, created_utc, created_count, skipped_count, failed_count) VALUES (@id,@t,@c,@s,@f);' `
+        -SqlParameters @{ id = $RunId; t = $now; c = $created; s = $skipped; f = $failed } | Out-Null
+    return [ordered]@{ runId = $RunId; created = $created; skipped = $skipped; failed = $failed; results = $results }
+}
+
+Export-ModuleMember -Function Get-TargetDomains, Build-ProvisioningPlan, Invoke-Provisioning, Get-ProvisioningRun, Get-TargetSkus, Invoke-LicensedProvisioning

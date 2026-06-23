@@ -25,6 +25,10 @@ export function Provisioning() {
   const [sharedPw, setSharedPw] = useState('')
   const [forceChange, setForceChange] = useState(true)
   const [addToGroups, setAddToGroups] = useState(false)
+  const [mode, setMode] = useState('mailuser') // mailuser (native MRS) | licensed (copy)
+  const [skus, setSkus] = useState([])
+  const [skuId, setSkuId] = useState('')
+  const [replaceUnlicensed, setReplaceUnlicensed] = useState(false)
   const [plan, setPlan] = useState(null)
   const [creds, setCreds] = useState(null) // execute result incl. one-time passwords
   const [latest, setLatest] = useState(null)
@@ -74,15 +78,41 @@ export function Provisioning() {
     } catch (e) { setError(String(e)) } finally { setBusy(null) }
   }
 
+  // Load licences when switching to licensed mode.
+  async function pickLicensedMode() {
+    setMode('licensed'); setError(null)
+    try { const s = (await api.provisioningSkus()).skus ?? []; setSkus(s); if (!skuId && s[0]) setSkuId(s[0].skuId) }
+    catch (e) { setError(String(e)) }
+  }
+
   async function execute() {
+    if (pwMode === 'shared' && !sharedPw) { setError('Enter a shared password first.'); return }
+
+    if (mode === 'licensed') {
+      if (selectedUpns.length === 0) { setError('Select users.'); return }
+      if (!skuId) { setError('Pick a licence.'); return }
+      if (!window.confirm(
+        `Create ${selectedUpns.length} LICENSED user(s) (real mailboxes) in TARGET on @${domain}.\n\n` +
+        `${replaceUnlicensed ? 'Existing UNLICENSED objects (e.g. MailUsers) at those UPNs will be DELETED and recreated.\n' : ''}` +
+        `This MUTATES the target tenant. Proceed?`)) return
+      setBusy('execute'); setError(null)
+      try {
+        const res = await api.provisioningExecuteLicensed({
+          confirm: true, sourceUpns: selectedUpns, targetDomain: domain, skuId,
+          passwordMode: pwMode, sharedPassword: pwMode === 'shared' ? sharedPw : undefined,
+          forceChange, replaceUnlicensed,
+        })
+        setCreds(res); setPlan(null)
+        const l = await api.provisioningLatest(); setLatest(l?.empty ? null : l)
+      } catch (e) { setError(String(e)) } finally { setBusy(null) }
+      return
+    }
+
     const toCreate = (plan ?? []).filter((p) => !p.willSkip).length
     if (toCreate === 0) { setError('Nothing to create — preview shows no eligible users.'); return }
-    if (pwMode === 'shared' && !sharedPw) { setError('Enter a shared password first.'); return }
-    const ok = window.confirm(
+    if (!window.confirm(
       `Create ${toCreate} MailUser(s) in the TARGET tenant on @${domain}.\n\n` +
-      `This MUTATES the target tenant. Existing accounts are skipped.\nProceed?`
-    )
-    if (!ok) return
+      `This MUTATES the target tenant. Existing accounts are skipped.\nProceed?`)) return
     setBusy('execute'); setError(null)
     try {
       const body = {
@@ -114,9 +144,30 @@ export function Provisioning() {
 
       {error && <p className="error">{error}</p>}
 
+      {/* Mode: MailUsers (native MRS) vs Licensed mailboxes (copy-based) */}
+      <div className="btn-row">
+        <button className={`tab ${mode === 'mailuser' ? 'active' : ''}`} onClick={() => setMode('mailuser')}>MailUsers (native MRS)</button>
+        <button className={`tab ${mode === 'licensed' ? 'active' : ''}`} onClick={pickLicensedMode}>Licensed mailboxes (copy)</button>
+      </div>
+      <p className="muted small">
+        {mode === 'licensed'
+          ? 'Creates real licensed M365 users with mailboxes — the correct target for copy-based migration.'
+          : 'Creates mail-enabled users (no mailbox) — the placeholder the native cross-tenant move expects.'}
+      </p>
+
       {/* Controls */}
       <div className="card" style={{ marginBottom: '1rem' }}>
         <div className="prov-controls">
+          {mode === 'licensed' && (
+            <label>Licence&nbsp;
+              <select value={skuId} onChange={(e) => setSkuId(e.target.value)}>
+                {skus.length === 0 && <option value="">(loading…)</option>}
+                {skus.map((s) => (
+                  <option key={s.skuId} value={s.skuId}>{s.partNumber} ({s.available} free)</option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>Target domain&nbsp;
             <select value={domain} onChange={(e) => setDomain(e.target.value)}>
               {domains.length === 0 && <option value="">(connect target Graph)</option>}
@@ -132,15 +183,19 @@ export function Provisioning() {
               <input type="text" placeholder="shared temp password" value={sharedPw} onChange={(e) => setSharedPw(e.target.value)} />
             )}
             <label><input type="checkbox" checked={forceChange} onChange={(e) => setForceChange(e.target.checked)} /> Force change at first sign-in</label>
-            <label><input type="checkbox" checked={addToGroups} onChange={(e) => setAddToGroups(e.target.checked)} /> Add to mapped target groups</label>
+            {mode === 'mailuser'
+              ? <label><input type="checkbox" checked={addToGroups} onChange={(e) => setAddToGroups(e.target.checked)} /> Add to mapped target groups</label>
+              : <label title="Delete an existing unlicensed object (e.g. a MailUser) at the target UPN and recreate it as a licensed user"><input type="checkbox" checked={replaceUnlicensed} onChange={(e) => setReplaceUnlicensed(e.target.checked)} /> Replace existing MailUser/unlicensed</label>}
           </fieldset>
         </div>
         <div className="btn-row">
-          <button className="btn" disabled={!!busy || selectedUpns.length === 0 || !domain} onClick={preview}>
-            {busy === 'preview' ? 'Building…' : `Preview (${selectedUpns.length})`}
-          </button>
-          <button className="btn primary" disabled={!!busy || !plan} onClick={execute}>
-            {busy === 'execute' ? 'Creating…' : 'Create in target'}
+          {mode === 'mailuser' && (
+            <button className="btn" disabled={!!busy || selectedUpns.length === 0 || !domain} onClick={preview}>
+              {busy === 'preview' ? 'Building…' : `Preview (${selectedUpns.length})`}
+            </button>
+          )}
+          <button className="btn primary" disabled={!!busy || !domain || selectedUpns.length === 0 || (mode === 'mailuser' && !plan) || (mode === 'licensed' && !skuId)} onClick={execute}>
+            {busy === 'execute' ? 'Creating…' : (mode === 'licensed' ? `Create ${selectedUpns.length} licensed user(s)` : 'Create in target')}
           </button>
         </div>
       </div>
