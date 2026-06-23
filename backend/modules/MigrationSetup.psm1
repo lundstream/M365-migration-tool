@@ -174,6 +174,11 @@ function Invoke-CreateMigrationEndpoint {
     $name = $Config.migration.endpointName
     $sourceDomain = $Config.tenants.source.exchangeOnline.organization
     # Best-effort cross-tenant defaults; override via config.migration.endpointParameters.
+    # Guard: don't attempt with a placeholder migration app (EXO would hang validating a
+    # non-existent app). Require migrationAppId unless the operator supplied full overrides.
+    if (-not $Config.migration.endpointParameters -and ($script:Placeholders -contains $Config.migration.migrationAppId)) {
+        return New-Item-Result 'endpoint' $name 'failed' 'Migration app not configured: config.migration.migrationAppId is still a placeholder. Register the cross-tenant migration app (in target, consented in source) and set migrationAppId before creating the endpoint.'
+    }
     $params = if ($Config.migration.endpointParameters) { ConvertTo-Splat $Config.migration.endpointParameters }
               else { @{ Name = $name; RemoteTenant = $sourceDomain; ApplicationId = $Config.migration.migrationAppId } }
 
@@ -200,6 +205,9 @@ function Invoke-CreateOrgRelationship {
 
     $name = $Config.migration.organizationRelationshipName
     $sourceDomain = $Config.tenants.source.exchangeOnline.organization
+    if (-not $Config.migration.organizationRelationshipParameters -and ($script:Placeholders -contains $Config.migration.migrationAppId)) {
+        return New-Item-Result 'orgRelationship' $name 'failed' 'Migration app not configured: config.migration.migrationAppId is still a placeholder. Set it before creating the organization relationship.'
+    }
     $params = if ($Config.migration.organizationRelationshipParameters) { ConvertTo-Splat $Config.migration.organizationRelationshipParameters }
               else {
                   @{
