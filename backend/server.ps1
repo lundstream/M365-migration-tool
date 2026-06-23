@@ -63,7 +63,7 @@ $env:MIG_BACKEND_DIR = $PSScriptRoot
 $env:MIG_LOG_DIR     = $LogDir
 $env:MIG_CONFIG_PATH = $ConfigPath
 
-Start-PodeServer -ScriptBlock {
+Start-PodeServer -RootPath $PSScriptRoot -ScriptBlock {
 
     Add-PodeEndpoint -Address $env:MIG_BIND_HOST -Port ([int]$env:MIG_PORT) -Protocol Http
 
