@@ -41,6 +41,9 @@ function Invoke-Graph {
         Graph REST call with throttling-aware retry (honors 429 / 5xx).
     #>
     param([string]$Method, [string]$Uri, $Body, [string]$ContentType, [string]$OutputFilePath, [int]$MaxAttempts = 6)
+    # Invoke-MgGraphRequest mishandles RELATIVE URIs that carry a query string (returns 404);
+    # always use the full v1.0 base. Absolute @odata.nextLink URLs pass through unchanged.
+    if ($Uri.StartsWith('/')) { $Uri = "https://graph.microsoft.com/v1.0$Uri" }
     for ($a = 1; ; $a++) {
         try {
             $p = @{ Method = $Method; Uri = $Uri; ErrorAction = 'Stop' }
@@ -79,8 +82,8 @@ function Get-MailFolderTree {
         $uri = if ($r.ContainsKey('@odata.nextLink')) { $r.'@odata.nextLink' } else { $null }
     }
     while ($stack.Count -gt 0) {
-        $pid = $stack.Pop()
-        $uri = "/users/$User/mailFolders/$pid/childFolders?`$top=100&`$select=id,displayName,parentFolderId,childFolderCount,totalItemCount"
+        $parentId = $stack.Pop()
+        $uri = "/users/$User/mailFolders/$parentId/childFolders?`$top=100&`$select=id,displayName,parentFolderId,childFolderCount,totalItemCount"
         while ($uri) {
             $r = Invoke-Graph -Method GET -Uri $uri
             foreach ($f in $r.value) { $list.Add($f); if ([int]$f.childFolderCount -gt 0) { $stack.Push([string]$f.id) } }
@@ -187,8 +190,13 @@ function Invoke-MailboxCopy {
                 if ($targetId -and (Test-Path $fDir)) {
                     foreach ($eml in (Get-ChildItem -LiteralPath $fDir -Filter '*.eml' -ErrorAction SilentlyContinue)) {
                         try {
+                            # MIME import is only accepted at the root /messages endpoint; create
+                            # there, then move the message into the matching target folder.
                             $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($eml.FullName))
-                            Invoke-Graph -Method POST -Uri "/users/$TargetUpn/mailFolders/$targetId/messages" -Body $b64 -ContentType 'text/plain' | Out-Null
+                            $created = Invoke-Graph -Method POST -Uri "/users/$TargetUpn/messages" -Body $b64 -ContentType 'text/plain'
+                            if ($targetId -and $created.id) {
+                                try { Invoke-Graph -Method POST -Uri "/users/$TargetUpn/messages/$($created.id)/move" -Body (@{ destinationId = $targetId } | ConvertTo-Json) -ContentType 'application/json' | Out-Null } catch { }
+                            }
                             Invoke-DbQuery -Query 'UPDATE mailbox_copy_jobs SET mail_done = mail_done + 1, updated_utc=@t WHERE job_id=@id;' -SqlParameters @{ t = [DateTime]::UtcNow.ToString('o'); id = $JobId } | Out-Null
                         }
                         catch { }
