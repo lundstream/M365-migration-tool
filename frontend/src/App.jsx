@@ -9,6 +9,7 @@ import { MigrationSetup } from './components/MigrationSetup'
 import { MailboxMove } from './components/MailboxMove'
 import { MailboxCopy } from './components/MailboxCopy'
 import { FileMove } from './components/FileMove'
+import { FileCopy } from './components/FileCopy'
 import { Monitor } from './components/Monitor'
 import { Reports } from './components/Reports'
 import { Manifest } from './components/Manifest'
@@ -39,7 +40,8 @@ const STEPS = [
     { id: 'mailbox-copy', label: 'Mailbox copy (Graph)', el: <MailboxCopy /> },
     { id: 'mailbox-move', label: 'Mailbox moves (native)', el: <MailboxMove /> },
     { id: 'permissions', label: 'Shared mbx permissions', el: <Permissions /> },
-    { id: 'file-move', label: 'OneDrive / SharePoint', el: <FileMove /> },
+    { id: 'file-copy', label: 'File copy (Graph)', el: <FileCopy /> },
+    { id: 'file-move', label: 'OneDrive / SharePoint (native)', el: <FileMove /> },
   ] },
   { label: 'Monitor & report', children: [
     { id: 'monitor', label: 'Monitoring', el: <Monitor /> },

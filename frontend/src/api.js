@@ -90,6 +90,10 @@ export const api = {
   fileMoveRefresh: (id) => request(`/api/file-move/jobs/${id}/refresh`, { method: 'POST' }),
   fileMoveStop: (id) => request(`/api/file-move/jobs/${id}/stop`, { method: 'POST' }),
 
+  // Copy-based OneDrive/SharePoint file migration (Graph)
+  fileCopyJobs: () => request('/api/file-copy/jobs'),
+  fileCopyStart: (type, source, target) => request('/api/file-copy/start', { method: 'POST', body: JSON.stringify({ type, source, target, confirm: true }) }),
+
   // Copy-based mailbox migration (Graph)
   mailboxCopyJobs: () => request('/api/mailbox-copy/jobs'),
   mailboxCopyJob: (id) => request(`/api/mailbox-copy/jobs/${id}`),
