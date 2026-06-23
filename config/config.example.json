@@ -47,6 +47,7 @@
     "endpointName": "CrossTenantMove",
     "organizationRelationshipName": "CrossTenant-Migration",
     "migrationAppId": "00000000-0000-0000-0000-000000000000",
+    "appSecretKeyVaultUrl": "",
     "scopeGroupSmtp": "xt-migration-scope@contoso.onmicrosoft.com",
     "spoScenario": "MnA",
     "targetDeliveryDomain": "fabrikam.mail.onmicrosoft.com",

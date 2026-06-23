@@ -3,6 +3,26 @@
 
 $bootstrap = Join-Path $env:MIG_BACKEND_DIR 'modules\_bootstrap.ps1'
 
+# GET /api/migration-setup/config — editable migration settings.
+Add-PodeRoute -Method Get -Path '/api/migration-setup/config' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    Write-PodeJsonResponse -Value (Get-MigrationConfigView -Config $config) -Depth 8
+}
+
+# PUT /api/migration-setup/config — save migration settings to config.json.
+Add-PodeRoute -Method Put -Path '/api/migration-setup/config' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $repoRoot = Split-Path $env:MIG_BACKEND_DIR -Parent
+    $targetPath = Join-Path $repoRoot 'config\config.json'
+    try {
+        $saved = Save-MigrationConfig -ConfigPath $targetPath -Update $WebEvent.Data
+        Add-AuditEntry -CorrelationId (New-CorrelationId) -Action 'migsetup.config.save' -Target 'config.json' -Detail 'Updated migration settings'
+        Write-PodeJsonResponse -Value @{ saved = $true; config = $saved } -Depth 8
+    }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message } -StatusCode 400 }
+}
+
 # GET /api/migration-setup/status — detect all three prerequisites (read-only).
 Add-PodeRoute -Method Get -Path '/api/migration-setup/status' -ArgumentList $bootstrap -ScriptBlock {
     param($bootstrap); . $bootstrap

@@ -57,6 +57,8 @@ export const api = {
   // Phase 4 — migration setup
   migrationSetupStatus: () => request('/api/migration-setup/status'),
   migrationSetupCreate: (item) => request('/api/migration-setup/create', { method: 'POST', body: JSON.stringify({ item, confirm: true }) }),
+  migrationConfig: () => request('/api/migration-setup/config'),
+  migrationConfigSave: (body) => request('/api/migration-setup/config', { method: 'PUT', body: JSON.stringify(body) }),
 
   // Phase 9 — manifest / groups / permissions
   manifest: () => request('/api/manifest'),

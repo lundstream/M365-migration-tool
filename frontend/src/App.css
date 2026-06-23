@@ -236,6 +236,16 @@
   font-size: 0.7rem; font-variant-numeric: tabular-nums; color: #1a1a1a;
 }
 
+/* Migration settings form */
+.cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.8rem;
+  margin: 0.75rem 0;
+}
+.cfg-field { display: flex; flex-direction: column; gap: 0.2rem; }
+.cfg-label { font-weight: 600; font-size: 0.85rem; }
+
 .muted { color: var(--muted); }
 .small { font-size: 0.85rem; }
 .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.85em; word-break: break-all; }

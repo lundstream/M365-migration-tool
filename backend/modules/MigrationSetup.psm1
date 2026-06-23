@@ -93,6 +93,47 @@ function New-Item-Result {
     return [ordered]@{ item = $Key; name = $Name; status = $Status; detail = $Detail; planned = $Planned }
 }
 
+$script:MigrationFields = @('migrationAppId', 'appSecretKeyVaultUrl', 'endpointName',
+    'organizationRelationshipName', 'scopeGroupSmtp', 'targetDeliveryDomain', 'spoScenario')
+
+function Get-MigrationConfigView {
+    <#
+    .SYNOPSIS
+        Returns the editable config.migration settings (no secrets — the Key Vault URL is a
+        reference, the actual secret stays in Key Vault).
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)] $Config)
+    $m = $Config.migration
+    $o = [ordered]@{}
+    foreach ($f in $script:MigrationFields) {
+        $o[$f] = if ($m -and ($m.PSObject.Properties.Name -contains $f)) { $m.$f } else { $null }
+    }
+    return $o
+}
+
+function Save-MigrationConfig {
+    <#
+    .SYNOPSIS
+        Persists edited migration settings to config/config.json (creates from example if absent).
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)][string]$ConfigPath, [Parameter(Mandatory)] $Update)
+    $config =
+        if (Test-Path -LiteralPath $ConfigPath) { Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json }
+        else { Get-Content -LiteralPath (Join-Path (Split-Path $ConfigPath -Parent) 'config.example.json') -Raw | ConvertFrom-Json }
+
+    if (-not ($config.PSObject.Properties.Name -contains 'migration') -or -not $config.migration) {
+        $config | Add-Member -NotePropertyName 'migration' -NotePropertyValue ([pscustomobject]@{}) -Force
+    }
+    foreach ($f in $script:MigrationFields) {
+        if (($Update.PSObject.Properties.Name -contains $f) -and ($null -ne $Update.$f)) {
+            if ($config.migration.PSObject.Properties.Name -contains $f) { $config.migration.$f = $Update.$f }
+            else { $config.migration | Add-Member -NotePropertyName $f -NotePropertyValue $Update.$f -Force }
+        }
+    }
+    ($config | ConvertTo-Json -Depth 12) | Set-Content -LiteralPath $ConfigPath -Encoding utf8
+    return (Get-MigrationConfigView -Config $config)
+}
+
 # ---------------- DETECT ----------------
 
 function Get-MigrationSetupStatus {
@@ -290,4 +331,4 @@ function Invoke-MigrationSetupCreate {
     }
 }
 
-Export-ModuleMember -Function Get-MigrationSetupStatus, Invoke-MigrationSetupCreate
+Export-ModuleMember -Function Get-MigrationSetupStatus, Invoke-MigrationSetupCreate, Get-MigrationConfigView, Save-MigrationConfig

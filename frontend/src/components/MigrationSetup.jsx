@@ -18,11 +18,24 @@ const STATUS_DOT = {
   failed: 'error',
 }
 
+// Editable migration settings (label + hint + which workload they apply to).
+const CONFIG_FIELDS = [
+  { key: 'migrationAppId', label: 'Migration app (client) ID', hint: 'Mailbox moves. The Reformea app with Mailbox.Migration, consented in Formea.' },
+  { key: 'appSecretKeyVaultUrl', label: 'App secret — Key Vault URL', hint: 'Mailbox moves. Azure Key Vault secret URL for the migration app secret.' },
+  { key: 'scopeGroupSmtp', label: 'Source scope group (SMTP)', hint: 'Mailbox moves. Mail-enabled security group in Formea listing migratable mailboxes.' },
+  { key: 'targetDeliveryDomain', label: 'Target delivery domain', hint: 'Mailbox moves. e.g. reformeaorg.mail.onmicrosoft.com' },
+  { key: 'endpointName', label: 'Migration endpoint name', hint: 'Mailbox moves.' },
+  { key: 'organizationRelationshipName', label: 'Org relationship name', hint: 'Mailbox moves.' },
+  { key: 'spoScenario', label: 'SPO scenario', hint: 'SharePoint moves. Usually MnA.' },
+]
+
 export function MigrationSetup() {
   const [status, setStatus] = useState(null)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [lastResult, setLastResult] = useState(null)
+  const [cfg, setCfg] = useState(null)
+  const [cfgSaved, setCfgSaved] = useState(false)
 
   async function loadStatus() {
     setBusy('status'); setError(null)
@@ -30,7 +43,15 @@ export function MigrationSetup() {
       setStatus(await api.migrationSetupStatus())
     } catch (e) { setError(String(e)) } finally { setBusy(null) }
   }
-  useEffect(() => { loadStatus() }, [])
+  async function loadConfig() {
+    try { setCfg(await api.migrationConfig()) } catch (e) { setError(String(e)) }
+  }
+  async function saveConfig() {
+    setBusy('cfg'); setError(null); setCfgSaved(false)
+    try { const r = await api.migrationConfigSave(cfg); setCfg(r.config); setCfgSaved(true) }
+    catch (e) { setError(String(e)) } finally { setBusy(null) }
+  }
+  useEffect(() => { loadStatus(); loadConfig() }, [])
 
   async function create(item) {
     const ok = window.confirm(
@@ -65,6 +86,37 @@ export function MigrationSetup() {
       </p>
 
       {error && <p className="error">{error}</p>}
+
+      {/* Editable migration settings (saved to config.json) */}
+      {cfg && (
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <h3 style={{ marginTop: 0, fontSize: '1rem' }}>Settings</h3>
+          <p className="muted small">
+            Saved to <code>config/config.json</code>. The <b>migration app</b> + scope group +
+            Key Vault secret are only needed for <b>mailbox</b> moves; SharePoint needs none of them.
+          </p>
+          <div className="cfg-grid">
+            {CONFIG_FIELDS.map((f) => (
+              <label key={f.key} className="cfg-field">
+                <span className="cfg-label">{f.label}</span>
+                <input
+                  className="filter"
+                  value={cfg[f.key] ?? ''}
+                  placeholder={f.hint}
+                  onChange={(e) => { setCfg((c) => ({ ...c, [f.key]: e.target.value })); setCfgSaved(false) }}
+                />
+                <span className="muted" style={{ fontSize: '0.72rem' }}>{f.hint}</span>
+              </label>
+            ))}
+          </div>
+          <div className="btn-row">
+            <button className="btn primary" disabled={busy === 'cfg'} onClick={saveConfig}>
+              {busy === 'cfg' ? 'Saving…' : 'Save settings'}
+            </button>
+            {cfgSaved && <span className="status-pill"><StatusDot status="ok" label="Saved" /></span>}
+          </div>
+        </div>
+      )}
 
       {lastResult && (
         <div className="card" style={{ marginBottom: '1rem', borderColor: lastResult.status === 'failed' ? '#d93025' : '#1e8e3e' }}>
