@@ -18,6 +18,17 @@ export function FileMove() {
   const [validation, setValidation] = useState(null)
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [sourceSites, setSourceSites] = useState(null)
+
+  async function loadSourceSites() {
+    setBusy('sites'); setError(null)
+    try { setSourceSites((await api.fileMoveSourceSites()).sites ?? []) }
+    catch (e) { setError(String(e)) } finally { setBusy(null) }
+  }
+  function pickSite(s) {
+    setSitePairs([{ source: s.url, target: s.targetUrl }])
+    setValidation(null)
+  }
 
   async function loadJobs() {
     try { setJobs((await api.fileMoveJobs()).jobs ?? []) } catch (e) { setError(String(e)) }
@@ -129,11 +140,46 @@ export function FileMove() {
         </div>
       ) : (
         <div className="card" style={{ marginBottom: '1rem' }}>
+          {/* Source-site picker */}
+          <div className="btn-row">
+            <button className="btn" disabled={!!busy} onClick={loadSourceSites}>
+              {busy === 'sites' ? 'Loading…' : 'Browse source sites'}
+            </button>
+            <span className="muted small">Pick a source site — the target URL is derived automatically.</span>
+          </div>
+          {sourceSites && (
+            <div className="table-scroll" style={{ maxHeight: '32vh', marginBottom: '0.75rem' }}>
+              <table className="grid-table">
+                <thead><tr><th></th><th>Source site</th><th>Type</th><th>→ Target URL</th></tr></thead>
+                <tbody>
+                  {sourceSites.length === 0 && <tr><td colSpan={4} className="muted">No sites found.</td></tr>}
+                  {sourceSites.map((s) => (
+                    <tr key={s.url} className={sitePairs[0]?.source === s.url ? 'unmatched' : ''}>
+                      <td><button className="btn" onClick={() => pickSite(s)}>Pick</button></td>
+                      <td className="mono small">{s.url}{s.title ? ` — ${s.title}` : ''}</td>
+                      <td>{s.isGroup ? <span style={{ color: '#f9ab00' }}>group</span> : 'site'}</td>
+                      <td className="mono small">{s.targetUrl}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {sitePairs.some((p) => p.source) && sourceSites?.find((s) => s.url === sitePairs[0]?.source)?.isGroup && (
+            <p className="error small">
+              Heads up: this is a <b>group/Teams-connected site</b>. Group sites need the group
+              migration path (target M365 group created first) — plain site move may be rejected
+              at validation. Validate first to see.
+            </p>
+          )}
+
+          {/* Manual / selected pairs */}
           {sitePairs.map((p, i) => (
             <div className="btn-row" key={i}>
               <input className="filter" style={{ flex: 1 }} placeholder="source site URL" value={p.source}
                 onChange={(e) => setSitePairs((arr) => arr.map((x, j) => j === i ? { ...x, source: e.target.value } : x))} />
-              <input className="filter" style={{ flex: 1 }} placeholder="target site URL" value={p.target}
+              <input className="filter" style={{ flex: 1 }} placeholder="target site URL (auto-derived)" value={p.target}
                 onChange={(e) => setSitePairs((arr) => arr.map((x, j) => j === i ? { ...x, target: e.target.value } : x))} />
             </div>
           ))}

@@ -9,6 +9,18 @@ Add-PodeRoute -Method Get -Path '/api/file-move/jobs' -ArgumentList $bootstrap -
     Write-PodeJsonResponse -Value @{ jobs = (Get-FileMoveJobs) } -Depth 12
 }
 
+# GET /api/file-move/sites/source — list source sites for the picker (read-only).
+Add-PodeRoute -Method Get -Path '/api/file-move/sites/source' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    try {
+        $sites = Get-SourceSites -Config $config
+        foreach ($s in $sites) { $s.targetUrl = (Get-DerivedTargetUrl -Config $config -SourceUrl $s.url) }
+        Write-PodeJsonResponse -Value @{ sites = $sites } -Depth 12
+    }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message } -StatusCode 400 }
+}
+
 # POST /api/file-move/validate — read-only pre-move validation. Body: { type, source, target }
 Add-PodeRoute -Method Post -Path '/api/file-move/validate' -ArgumentList $bootstrap -ScriptBlock {
     param($bootstrap); . $bootstrap

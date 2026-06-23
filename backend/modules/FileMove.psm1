@@ -74,6 +74,47 @@ function Get-PartnerTargetHostUrl {
     finally { Disconnect-Spo }
 }
 
+function Get-SourceSites {
+    <#
+    .SYNOPSIS
+        Lists source SharePoint site collections (read-only) for the GUI picker.
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)] $Config)
+    $src = $Config.tenants.source
+    if (-not (Test-SpoConfigured $src)) { throw 'SharePoint is not configured for the source tenant.' }
+    try {
+        Connect-TenantSpo -Tenant $src
+        $sites = Get-SPOSite -Limit All -ErrorAction Stop | Where-Object { $_.Url -match '/sites/' }
+        return @($sites | ForEach-Object {
+                [ordered]@{
+                    url      = [string]$_.Url
+                    title    = [string]$_.Title
+                    template = [string]$_.Template
+                    isGroup  = ([string]$_.Template -like 'GROUP*')
+                    storageMb = [int]$_.StorageUsageCurrent
+                }
+            } | Sort-Object { $_.url })
+    }
+    finally { Disconnect-Spo }
+}
+
+function Get-TargetSiteRoot {
+    # Derive the target SPO root (https://<tenant>.sharepoint.com) from the admin URL.
+    param($Config)
+    $admin = [string]$Config.tenants.target.sharePoint.adminUrl
+    return ($admin -replace '-admin\.sharepoint\.com', '.sharepoint.com')
+}
+
+function Get-DerivedTargetUrl {
+    <#
+    .SYNOPSIS
+        Maps a source site URL to the equivalent target URL (same path under target host).
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)] $Config, [Parameter(Mandatory)][string]$SourceUrl)
+    $path = ([uri]$SourceUrl).AbsolutePath   # e.g. /sites/Test-site
+    return ((Get-TargetSiteRoot -Config $Config).TrimEnd('/') + $path)
+}
+
 # Per-type cmdlet names + identity parameter mapping.
 function Get-MoveCmdlets {
     param([string]$Type)
@@ -228,4 +269,4 @@ function ConvertFrom-JobRow {
 
 Export-ModuleMember -Function `
     Test-FileMove, Start-FileMove, Update-FileMoveState, Stop-FileMove, `
-    Get-FileMoveJobs, Get-FileMoveJob
+    Get-FileMoveJobs, Get-FileMoveJob, Get-SourceSites, Get-DerivedTargetUrl
