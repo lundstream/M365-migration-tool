@@ -14,6 +14,7 @@ export function FileCopy() {
   const [jobs, setJobs] = useState([])
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  const [showSkipped, setShowSkipped] = useState(null)
   const timer = useRef(null)
 
   async function loadJobs() { try { setJobs((await api.fileCopyJobs()).jobs ?? []) } catch (e) { setError(String(e)) } }
@@ -50,6 +51,7 @@ export function FileCopy() {
       <p className="muted">
         Copy-based OneDrive / SharePoint migration via Graph — <b>no Azure, source untouched</b>.
         Copies files + folders. <b>Files only</b> — sharing/permissions are not copied (access resets to target defaults).
+        <b>OneNote notebooks are detected and listed</b> (not copied — they need manual <code>.onepkg</code> migration; see the Skipped column).
       </p>
       <div className="oneanddone">
         ℹ Requires Graph <b>application</b> permissions (admin-consented): source
@@ -113,22 +115,47 @@ export function FileCopy() {
       <h3 style={{ fontSize: '1rem' }}>Copy jobs</h3>
       <div className="table-scroll">
         <table className="grid-table">
-          <thead><tr><th>Status</th><th>Type</th><th>Source → Target</th><th>Phase</th><th>Files</th><th>Size</th></tr></thead>
+          <thead><tr><th>Status</th><th>Type</th><th>Source → Target</th><th>Phase</th><th>Files</th><th>Size</th><th>Skipped</th></tr></thead>
           <tbody>
-            {jobs.length === 0 && <tr><td colSpan={6} className="muted">No copy jobs yet.</td></tr>}
+            {jobs.length === 0 && <tr><td colSpan={7} className="muted">No copy jobs yet.</td></tr>}
             {jobs.map((j) => (
               <tr key={j.jobId}>
                 <td><StatusDot status={DOT[j.status] ?? 'loading'} label={j.status} /></td>
                 <td>{j.type}</td>
                 <td className="mono small">{j.source}<br />→ {j.target}</td>
-                <td className="muted small">{j.phase ?? '—'}{j.error ? ` · ${j.error}` : ''}</td>
-                <td>{j.filesDone}/{j.filesTotal}</td>
+                <td className="muted small" style={{ maxWidth: 220 }}>
+                  <b>{j.phase ?? '—'}</b>{j.status === 'running' ? ' ⏳' : ''}<br />
+                  {j.error ? <span className="error">{j.error}</span> : (j.detail ?? '—')}
+                </td>
+                <td>{j.filesDone}/{j.filesTotal}{j.filesSkipped > 0 && <div className="muted small">skip {j.filesSkipped}</div>}</td>
                 <td className="muted small">{fmtBytes(j.bytesTotal)}</td>
+                <td>{j.skippedCount > 0
+                  ? <button className="btn" style={{ padding: '0.1rem 0.4rem' }} onClick={() => setShowSkipped(j)}>⚠ {j.skippedCount} notebook{j.skippedCount === 1 ? '' : 's'}</button>
+                  : <span className="muted small">—</span>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {showSkipped && (
+        <div className="oneanddone" style={{ marginTop: '1rem' }}>
+          <div className="panel-head" style={{ marginBottom: '0.4rem' }}>
+            <h3 style={{ fontSize: '1rem', margin: 0 }}>Skipped — need manual migration</h3>
+            <button className="btn" onClick={() => setShowSkipped(null)}>Close</button>
+          </div>
+          <p className="muted small" style={{ marginTop: 0 }}>
+            OneNote notebooks (and other <code>package</code> items) can't be reconstructed by a raw
+            file copy. Migrate each via the OneNote desktop app: <b>Export → OneNote Package (.onepkg)</b> on
+            the source, then <b>File → Open</b> on the target and move it to the destination.
+          </p>
+          <ul className="mono small" style={{ margin: 0, paddingLeft: '1.2rem' }}>
+            {(showSkipped.skippedItems ?? []).map((it, i) => (
+              <li key={i}>{it.path}{it.kind ? <span className="muted"> · {it.kind}</span> : null}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }

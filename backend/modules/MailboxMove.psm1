@@ -295,6 +295,101 @@ function Set-SourceForwarding {
     return @{ batchId = $BatchId; results = $results }
 }
 
+function Set-MappingForwarding {
+    <#
+    .SYNOPSIS
+        Cutover forwarding for the COPY workflow: sets (or clears) ForwardingSmtpAddress on the
+        SOURCE mailboxes to their matched target address, so new mail flows to the new tenant.
+    .DESCRIPTION
+        Drives off the mappings table (not native batches). Server-side forwarding via
+        Set-Mailbox -ForwardingSmtpAddress (admin-set; not a user inbox rule). KeepCopy maps to
+        -DeliverToMailboxAndForward: $true leaves a copy in the old mailbox too (safer during
+        transition), $false forwards only. -Remove clears forwarding again.
+        Targets only 'matched' mappings with a target address; an optional SourceUpns subset
+        narrows it further.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Config,
+        [Parameter(Mandatory)][string]$RunId,
+        [string[]]$SourceUpns,
+        [bool]$KeepCopy = $true,
+        [switch]$Remove
+    )
+    $src = $Config.tenants.source
+    if (-not (Test-ExoConfigured $src)) { throw 'Source Exchange Online is not configured.' }
+
+    $maps = @(Get-Mappings) | Where-Object { $_.matchState -eq 'matched' -and $_.targetUpn }
+    if ($SourceUpns -and $SourceUpns.Count -gt 0) { $maps = @($maps | Where-Object { $SourceUpns -contains $_.sourceUpn }) }
+    if (@($maps).Count -eq 0) { throw 'No matched users with a target address to forward.' }
+
+    $results = [System.Collections.Generic.List[object]]::new()
+    try {
+        Connect-TenantExo -Tenant $src
+        Assert-CmdletReady -Name 'Set-Mailbox' -RequiredParameters @('Identity', 'ForwardingSmtpAddress', 'DeliverToMailboxAndForward')
+        foreach ($m in $maps) {
+            $corr = New-CorrelationId
+            try {
+                if ($Remove) {
+                    Invoke-WithRetry -RunId $RunId -Action {
+                        Set-Mailbox -Identity $m.sourceUpn -ForwardingSmtpAddress $null -ForwardingAddress $null -DeliverToMailboxAndForward $false -ErrorAction Stop
+                    } | Out-Null
+                    Add-AuditEntry -RunId $RunId -CorrelationId $corr -Action 'mailbox.forwarding.clear' -Target $m.sourceUpn -Detail 'forwarding removed'
+                    $results.Add(@{ sourceUpn = $m.sourceUpn; status = 'cleared' })
+                }
+                else {
+                    Invoke-WithRetry -RunId $RunId -Action {
+                        Set-Mailbox -Identity $m.sourceUpn -ForwardingSmtpAddress $m.targetUpn -DeliverToMailboxAndForward $KeepCopy -ErrorAction Stop
+                    } | Out-Null
+                    Add-AuditEntry -RunId $RunId -CorrelationId $corr -Action 'mailbox.forwarding.set' -Target $m.sourceUpn -Detail "-> $($m.targetUpn) (keepCopy=$KeepCopy)"
+                    $results.Add(@{ sourceUpn = $m.sourceUpn; status = 'set'; target = $m.targetUpn; keepCopy = $KeepCopy })
+                }
+            }
+            catch { $results.Add(@{ sourceUpn = $m.sourceUpn; status = 'failed'; reason = $_.Exception.Message }) }
+        }
+    }
+    finally { Disconnect-TenantExo }
+    return @{ action = ($Remove ? 'remove' : 'set'); results = $results }
+}
+
+function Get-OutboundForwardingMode {
+    <#
+    .SYNOPSIS
+        Reads the SOURCE tenant's outbound auto-forwarding policy (AutoForwardingMode). When this
+        is 'Automatic' or 'Off', admin-set ForwardingSmtpAddress to external domains is dropped.
+    #>
+    [CmdletBinding()] param([Parameter(Mandatory)] $Config)
+    $src = $Config.tenants.source
+    if (-not (Test-ExoConfigured $src)) { throw 'Source Exchange Online is not configured.' }
+    try {
+        Connect-TenantExo -Tenant $src
+        $p = Get-HostedOutboundSpamFilterPolicy -Identity Default
+        return @{ autoForwardingMode = [string]$p.AutoForwardingMode }
+    }
+    finally { Disconnect-TenantExo }
+}
+
+function Set-OutboundForwardingMode {
+    <#
+    .SYNOPSIS
+        Sets the SOURCE tenant outbound auto-forwarding policy. 'On' force-allows external
+        forwarding (needed for cutover); 'Automatic' = service decides (usually blocks); 'Off' = blocked.
+    #>
+    [CmdletBinding()] param(
+        [Parameter(Mandatory)] $Config, [Parameter(Mandatory)][string]$RunId,
+        [ValidateSet('On', 'Automatic', 'Off')][string]$Mode = 'On')
+    $src = $Config.tenants.source
+    if (-not (Test-ExoConfigured $src)) { throw 'Source Exchange Online is not configured.' }
+    try {
+        Connect-TenantExo -Tenant $src
+        Assert-CmdletReady -Name 'Set-HostedOutboundSpamFilterPolicy' -RequiredParameters @('Identity', 'AutoForwardingMode')
+        Set-HostedOutboundSpamFilterPolicy -Identity Default -AutoForwardingMode $Mode -ErrorAction Stop | Out-Null
+        Add-AuditEntry -RunId $RunId -CorrelationId (New-CorrelationId) -Action 'exo.outbound-forwarding.set' -Target 'Default' -Detail "AutoForwardingMode=$Mode"
+        return @{ autoForwardingMode = $Mode }
+    }
+    finally { Disconnect-TenantExo }
+}
+
 # ---------------- COMPLETE (DESTRUCTIVE, gated) ----------------
 
 function Complete-MailboxBatch {
@@ -341,4 +436,5 @@ function Complete-MailboxBatch {
 
 Export-ModuleMember -Function `
     Get-MailboxBatches, Get-MailboxBatch, Test-BatchReadyToComplete, `
-    New-MailboxBatch, Update-MailboxBatchStatus, Set-SourceForwarding, Complete-MailboxBatch
+    New-MailboxBatch, Update-MailboxBatchStatus, Set-SourceForwarding, Set-MappingForwarding, `
+    Get-OutboundForwardingMode, Set-OutboundForwardingMode, Complete-MailboxBatch

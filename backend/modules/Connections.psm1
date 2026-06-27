@@ -46,8 +46,12 @@ function Import-GraphModules {
         come along via the sub-modules.
     #>
     [CmdletBinding()] param()
+    # Pin to 2.36.1: that version does NOT bundle Microsoft.Identity.Client (MSAL), so EXO
+    # (which needs its own MSAL 4.83.1) can coexist in the same process. Graph 2.37+ ship MSAL
+    # 4.82.1 which blocks EXO. Keeping all sub-modules on one version also avoids the inter-
+    # module assembly-load conflict.
     foreach ($m in 'Microsoft.Graph.Users', 'Microsoft.Graph.Groups', 'Microsoft.Graph.Identity.DirectoryManagement') {
-        if (-not (Get-Module -Name $m)) { Import-Module $m -ErrorAction Stop }
+        if (-not (Get-Module -Name $m)) { Import-Module $m -RequiredVersion 2.36.1 -ErrorAction Stop }
     }
 }
 

@@ -39,7 +39,49 @@ Add-PodeRoute -Method Post -Path '/api/mailbox-copy/start' -ArgumentList $bootst
             try { Update-CopyJob -JobId $jobId -Set @{ status = 'failed'; error = $_.Exception.Message } } catch { }
         }
     }
-    Start-ThreadJob -ScriptBlock $worker -ArgumentList $env:MIG_BACKEND_DIR, $env:MIG_DB_PATH, $env:MIG_LOG_DIR, $env:MIG_CONFIG_PATH, $jobId, $d.sourceUpn, $d.targetUpn, $scope | Out-Null
+    # Start-Job (NOT Start-ThreadJob): runs in a SEPARATE PROCESS so each copy gets its own
+    # Microsoft.Graph auth context. The Graph SDK stores Connect-MgGraph state in a process-global
+    # singleton, so same-process concurrency would let jobs clobber each other's tenant connection.
+    # Separate processes make concurrent copies (e.g. mail + OneDrive, or several users) safe.
+    Start-Job -ScriptBlock $worker -ArgumentList $env:MIG_BACKEND_DIR, $env:MIG_DB_PATH, $env:MIG_LOG_DIR, $env:MIG_CONFIG_PATH, $jobId, $d.sourceUpn, $d.targetUpn, $scope | Out-Null
 
     Write-PodeJsonResponse -Value @{ started = $true; jobId = $jobId } -Depth 8
+}
+
+# POST /api/mailbox-copy/forwarding — cutover: set/clear source->target forwarding for matched
+# users (gated mutation on the SOURCE tenant). Body: { sourceUpns?, keepCopy?, remove?, confirm }
+Add-PodeRoute -Method Post -Path '/api/mailbox-copy/forwarding' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $d = $WebEvent.Data
+    if (-not $d.confirm) { Write-PodeJsonResponse -Value @{ error = 'Missing explicit confirmation.' } -StatusCode 400; return }
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    $runId = New-RunId
+    New-Run -RunId $runId -Kind 'mailbox-copy-forwarding' -Notes ($d.remove ? 'clear forwarding' : 'set forwarding') | Out-Null
+    $p = @{ Config = $config; RunId = $runId }
+    if ($d.sourceUpns) { $p.SourceUpns = @($d.sourceUpns) }
+    if ($null -ne $d.keepCopy) { $p.KeepCopy = [bool]$d.keepCopy }
+    if ($d.remove) { $p.Remove = $true }
+    try { Write-PodeJsonResponse -Value (Set-MappingForwarding @p) -Depth 12 }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message; runId = $runId } -StatusCode 400 }
+}
+
+# GET /api/mailbox-copy/forwarding-policy — read source tenant outbound auto-forwarding mode.
+Add-PodeRoute -Method Get -Path '/api/mailbox-copy/forwarding-policy' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    try { Write-PodeJsonResponse -Value (Get-OutboundForwardingMode -Config $config) -Depth 8 }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message } -StatusCode 400 }
+}
+
+# POST /api/mailbox-copy/forwarding-policy — set it (default On = allow external forwarding). Gated.
+Add-PodeRoute -Method Post -Path '/api/mailbox-copy/forwarding-policy' -ArgumentList $bootstrap -ScriptBlock {
+    param($bootstrap); . $bootstrap
+    $d = $WebEvent.Data
+    if (-not $d.confirm) { Write-PodeJsonResponse -Value @{ error = 'Missing explicit confirmation.' } -StatusCode 400; return }
+    $config = Get-Content -LiteralPath $env:MIG_CONFIG_PATH -Raw | ConvertFrom-Json
+    $runId = New-RunId
+    New-Run -RunId $runId -Kind 'exo-outbound-forwarding' -Notes "AutoForwardingMode=$($d.mode)" | Out-Null
+    $mode = if ($d.mode) { [string]$d.mode } else { 'On' }
+    try { Write-PodeJsonResponse -Value (Set-OutboundForwardingMode -Config $config -RunId $runId -Mode $mode) -Depth 8 }
+    catch { Write-PodeJsonResponse -Value @{ error = $_.Exception.Message; runId = $runId } -StatusCode 400 }
 }

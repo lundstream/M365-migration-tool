@@ -17,3 +17,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Local operational/diagnostic scripts (tenant-specific, not for the repo)
+backend/tools/

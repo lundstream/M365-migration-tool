@@ -157,8 +157,11 @@ ON CONFLICT(source_upn) DO UPDATE SET
 function Invoke-AutoMatch {
     <#
     .SYNOPSIS
-        Auto-matches cached source users to target users on UPN then proxyAddresses,
-        flags conflicts (ambiguous or many-to-one), and persists to the mappings table.
+        Auto-matches cached source users to target users on UPN, then proxyAddresses,
+        then domain-independent fallbacks (address local-part, then display name) so a
+        cross-tenant rename like test.testsson@formea.se -> test.testsson@reformea.se
+        matches automatically. Flags conflicts (ambiguous or many-to-one) and persists
+        to the mappings table.
     #>
     [CmdletBinding()]
     param()
@@ -167,12 +170,35 @@ function Invoke-AutoMatch {
     $target = Get-CachedUsers -Tenant 'target'
     if (@($source).Count -eq 0) { throw 'No cached source users. Sync the source tenant first.' }
 
+    # Local-part of an address/UPN: the bit before '@', lowercased (domain-independent key).
+    $localOf = { param($addr) if ($addr -and $addr -match '@') { ($addr -split '@', 2)[0].ToLowerInvariant() } else { $null } }
+    # Strip the SMTP: prefix proxyAddresses carry, then take the local-part.
+    $localOfProxy = { param($p) if ($p) { & $localOf ($p -replace '^(?i)smtp:', '') } else { $null } }
+
     # Indexes over the target directory.
     $byUpn = @{}
     $byProxy = @{}
+    $byLocal = @{}    # local-part -> list of target users (cross-domain fallback)
+    $byName = @{}     # normalized display name -> list of target users (last-resort fallback)
     foreach ($u in $target) {
-        if ($u.upn) { $byUpn[$u.upn.ToLowerInvariant()] = $u }
-        foreach ($p in $u.proxy_addresses) { if ($p) { ($byProxy[$p] ??= [System.Collections.Generic.List[object]]::new()).Add($u) } }
+        if ($u.upn) {
+            $byUpn[$u.upn.ToLowerInvariant()] = $u
+            $lp = & $localOf $u.upn
+            if ($lp) { ($byLocal[$lp] ??= [System.Collections.Generic.List[object]]::new()).Add($u) }
+        }
+        foreach ($p in $u.proxy_addresses) {
+            if ($p) {
+                ($byProxy[$p] ??= [System.Collections.Generic.List[object]]::new()).Add($u)
+                $plp = & $localOfProxy $p
+                if ($plp -and -not ($byLocal[$plp] -and $byLocal[$plp].Contains($u))) {
+                    ($byLocal[$plp] ??= [System.Collections.Generic.List[object]]::new()).Add($u)
+                }
+            }
+        }
+        if ($u.display_name) {
+            $dn = $u.display_name.Trim().ToLowerInvariant()
+            if ($dn) { ($byName[$dn] ??= [System.Collections.Generic.List[object]]::new()).Add($u) }
+        }
     }
 
     $decisions = @()
@@ -190,6 +216,32 @@ function Invoke-AutoMatch {
                 foreach ($hit in $byProxy[$p]) {
                     if (-not $candidates.ContainsKey($hit.user_id)) { $candidates[$hit.user_id] = $hit }
                     if (-not $method) { $method = 'proxy' }
+                }
+            }
+        }
+
+        # Domain-independent fallbacks — only when an exact-address match found nothing,
+        # so a clean upn/proxy hit is never muddied into a false conflict.
+        if ($candidates.Count -eq 0) {
+            $keys = [System.Collections.Generic.List[string]]::new()
+            $sl = & $localOf $s.upn
+            if ($sl) { $keys.Add($sl) }
+            foreach ($p in $s.proxy_addresses) { $pl = & $localOfProxy $p; if ($pl -and -not $keys.Contains($pl)) { $keys.Add($pl) } }
+            foreach ($k in $keys) {
+                if ($byLocal.ContainsKey($k)) {
+                    foreach ($hit in $byLocal[$k]) {
+                        if (-not $candidates.ContainsKey($hit.user_id)) { $candidates[$hit.user_id] = $hit }
+                        if (-not $method) { $method = 'localpart' }
+                    }
+                }
+            }
+        }
+        if ($candidates.Count -eq 0 -and $s.display_name) {
+            $dn = $s.display_name.Trim().ToLowerInvariant()
+            if ($dn -and $byName.ContainsKey($dn)) {
+                foreach ($hit in $byName[$dn]) {
+                    if (-not $candidates.ContainsKey($hit.user_id)) { $candidates[$hit.user_id] = $hit }
+                    if (-not $method) { $method = 'name' }
                 }
             }
         }

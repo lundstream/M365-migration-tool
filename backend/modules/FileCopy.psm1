@@ -58,12 +58,19 @@ function Resolve-DriveId {
 
 function Invoke-DriveDownload {
     param([string]$DriveId, [string]$ItemId, [string]$RelPath, [string]$TempRoot, [string]$JobId)
-    $uri = "/drives/$DriveId/items/$ItemId/children?`$top=200&`$select=id,name,folder,file,size"
+    $uri = "/drives/$DriveId/items/$ItemId/children?`$top=200&`$select=id,name,folder,file,size,package"
     while ($uri) {
         $r = Invoke-Graph -Method GET -Uri $uri
         foreach ($it in $r.value) {
             $child = if ($RelPath) { "$RelPath/$($it.name)" } else { [string]$it.name }
-            if ($it.ContainsKey('folder')) {
+            # OneNote notebooks (and any other 'package' item) are opaque bundles that a raw
+            # drive copy cannot reconstruct cross-tenant — record them for manual .onepkg
+            # migration and DON'T recurse/download (which would produce broken loose files).
+            if ($it.ContainsKey('package')) {
+                $kind = if ($it.package -and $it.package.type) { $it.package.type } else { 'package' }
+                Add-SkippedItem -JobId $JobId -Path $child -Kind $kind
+            }
+            elseif ($it.ContainsKey('folder')) {
                 Invoke-DriveDownload -DriveId $DriveId -ItemId $it.id -RelPath $child -TempRoot $TempRoot -JobId $JobId
             }
             elseif ($it.ContainsKey('file')) {
@@ -104,6 +111,16 @@ function Invoke-DriveUpload {
     foreach ($f in (Get-ChildItem -LiteralPath $TempRoot -Recurse -File -ErrorAction SilentlyContinue)) {
         $rel = $f.FullName.Substring($TempRoot.Length).TrimStart('\', '/').Replace('\', '/')
         $encPath = (($rel -split '/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+        # Resume/dedup: if the target already has this file at the same size, skip the upload.
+        try {
+            $existing = Invoke-Graph -Method GET -Uri "/drives/$DriveId/root:/$encPath`?`$select=size"
+            if ($existing -and [int64]$existing.size -eq $f.Length) {
+                Invoke-DbQuery -Query 'UPDATE file_copy_jobs SET files_skipped=files_skipped+1, files_done=files_done+1, updated_utc=@t WHERE job_id=@id;' -SqlParameters @{ t = [DateTime]::UtcNow.ToString('o'); id = $JobId } | Out-Null
+                continue
+            }
+        }
+        catch { }   # not found / not selectable -> proceed to upload
+        Update-FileCopyJob -JobId $JobId -Set @{ detail = "Uploading: $rel" }
         try {
             if ($f.Length -lt 4194304) {
                 Invoke-Graph -Method PUT -Uri "/drives/$DriveId/root:/$encPath`:/content" -InputFilePath $f.FullName -ContentType 'application/octet-stream' | Out-Null
@@ -125,7 +142,7 @@ function Invoke-FileCopy {
     if (-not (Test-GraphConfigured $src) -or -not (Test-GraphConfigured $tgt)) { throw 'Graph is not configured for both tenants.' }
     $temp = Join-Path (Split-Path $env:MIG_DB_PATH -Parent) "filecopy\$JobId"
     New-Item -ItemType Directory -Path $temp -Force | Out-Null
-    Update-FileCopyJob -JobId $JobId -Set @{ status = 'running'; phase = 'download' }
+    Update-FileCopyJob -JobId $JobId -Set @{ status = 'running'; phase = 'download'; started_utc = [DateTime]::UtcNow.ToString('o'); detail = 'Downloading source files…' }
 
     try {
         Connect-TenantGraph -Tenant $src
@@ -134,7 +151,7 @@ function Invoke-FileCopy {
     }
     finally { Disconnect-Graph }
 
-    Update-FileCopyJob -JobId $JobId -Set @{ phase = 'upload' }
+    Update-FileCopyJob -JobId $JobId -Set @{ phase = 'upload'; detail = 'Uploading to target…' }
     try {
         Connect-TenantGraph -Tenant $tgt
         $tgtDrive = Resolve-DriveId -Type $Type -Identity $Target
@@ -142,9 +159,22 @@ function Invoke-FileCopy {
     }
     finally { Disconnect-Graph }
 
-    Update-FileCopyJob -JobId $JobId -Set @{ status = 'completed'; phase = 'done' }
+    Update-FileCopyJob -JobId $JobId -Set @{ status = 'completed'; phase = 'done'; detail = 'Completed' }
     Add-AuditEntry -RunId $JobId -CorrelationId (New-CorrelationId) -Action "filecopy.$Type" -Target $Source -Detail "-> $Target (files only, source untouched)"
     return Get-FileCopyJob -JobId $JobId
+}
+
+function Add-SkippedItem {
+    # Append one skipped package/notebook path to the job (JSON array + counter). Called
+    # from the download thread only, so the read-modify-write is single-threaded per job.
+    param([string]$JobId, [string]$Path, [string]$Kind)
+    $row = @(Invoke-DbQuery -Query 'SELECT skipped_items FROM file_copy_jobs WHERE job_id=@id;' -SqlParameters @{ id = $JobId }) | Select-Object -First 1
+    $list = [System.Collections.Generic.List[object]]::new()
+    if ($row -and $row.skipped_items) { try { foreach ($e in (ConvertFrom-Json $row.skipped_items)) { $list.Add($e) } } catch { } }
+    $list.Add([ordered]@{ path = $Path; kind = $Kind })
+    $json = ConvertTo-Json -InputObject @($list) -Depth 4 -Compress
+    Invoke-DbQuery -Query 'UPDATE file_copy_jobs SET skipped_count=@c, skipped_items=@j, updated_utc=@t WHERE job_id=@id;' `
+        -SqlParameters @{ c = $list.Count; j = $json; t = [DateTime]::UtcNow.ToString('o'); id = $JobId } | Out-Null
 }
 
 function Update-FileCopyJob {
@@ -163,7 +193,17 @@ function New-FileCopyJob {
         -SqlParameters @{ id = $jobId; ty = $Type; s = $Source; t = $Target; n = $now } | Out-Null
     return $jobId
 }
-function ConvertFrom-FileCopyRow { param($r) [ordered]@{ jobId = $r.job_id; type = $r.type; source = $r.source; target = $r.target; status = $r.status; phase = $r.phase; error = $r.error; filesTotal = $r.files_total; filesDone = $r.files_done; bytesTotal = $r.bytes_total; createdUtc = $r.created_utc; updatedUtc = $r.updated_utc } }
+function ConvertFrom-FileCopyRow {
+    param($r)
+    $skipped = @()
+    $sc = 0
+    if ($r.PSObject.Properties.Name -contains 'skipped_items' -and $r.skipped_items) {
+        try { $skipped = @(ConvertFrom-Json $r.skipped_items) } catch { $skipped = @() }
+    }
+    if ($r.PSObject.Properties.Name -contains 'skipped_count' -and $null -ne $r.skipped_count) { $sc = [int]$r.skipped_count }
+    $col = { param($n, $d) if ($r.PSObject.Properties.Name -contains $n -and $null -ne $r.$n) { $r.$n } else { $d } }
+    [ordered]@{ jobId = $r.job_id; type = $r.type; source = $r.source; target = $r.target; status = $r.status; phase = $r.phase; error = $r.error; filesTotal = $r.files_total; filesDone = $r.files_done; filesSkipped = (& $col 'files_skipped' 0); bytesTotal = $r.bytes_total; skippedCount = $sc; skippedItems = $skipped; detail = (& $col 'detail' $null); startedUtc = (& $col 'started_utc' $null); createdUtc = $r.created_utc; updatedUtc = $r.updated_utc }
+}
 function Get-FileCopyJob { [CmdletBinding()] param([Parameter(Mandatory)][string]$JobId) $r = @(Invoke-DbQuery -Query 'SELECT * FROM file_copy_jobs WHERE job_id=@id;' -SqlParameters @{ id = $JobId }) | Select-Object -First 1; if (-not $r) { return $null }; ConvertFrom-FileCopyRow $r }
 function Get-FileCopyJobs { [CmdletBinding()] param() @(Invoke-DbQuery -Query 'SELECT * FROM file_copy_jobs ORDER BY created_utc DESC;') | ForEach-Object { ConvertFrom-FileCopyRow $_ } }
 

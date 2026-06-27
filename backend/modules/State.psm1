@@ -31,9 +31,18 @@ function Invoke-DbQuery {
     if (-not $script:DbPath) {
         throw 'Database not initialized. Call Initialize-Database first.'
     }
-    $params = @{ DataSource = $script:DbPath; Query = $Query }
-    if ($SqlParameters) { $params.SqlParameters = $SqlParameters }
-    return Invoke-SqliteQuery @params
+    # Open a short-lived connection with a busy timeout. Copy workers now run in their OWN process
+    # (Start-Job) while the API server polls the same app.db, so without a busy timeout a writer
+    # that collides with the server's reads fails instantly ("database is locked") and the per-item
+    # catch swallows it — silently losing counter updates. The timeout makes it wait for the lock.
+    $conn = New-SQLiteConnection -DataSource $script:DbPath
+    try {
+        Invoke-SqliteQuery -SQLiteConnection $conn -Query 'PRAGMA busy_timeout=15000;' | Out-Null
+        $params = @{ SQLiteConnection = $conn; Query = $Query }
+        if ($SqlParameters) { $params.SqlParameters = $SqlParameters }
+        return Invoke-SqliteQuery @params
+    }
+    finally { if ($conn) { $conn.Close(); $conn.Dispose() } }
 }
 
 function Invoke-DbMigration {

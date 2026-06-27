@@ -33,7 +33,9 @@ Add-PodeRoute -Method Post -Path '/api/file-copy/start' -ArgumentList $bootstrap
         }
         catch { try { Update-FileCopyJob -JobId $jobId -Set @{ status = 'failed'; error = $_.Exception.Message } } catch { } }
     }
-    Start-ThreadJob -ScriptBlock $worker -ArgumentList $env:MIG_BACKEND_DIR, $env:MIG_DB_PATH, $env:MIG_LOG_DIR, $env:MIG_CONFIG_PATH, $jobId, $d.type, $d.source, $d.target | Out-Null
+    # Start-Job (separate process) so this copy's Graph auth context is isolated from any other
+    # running copy — the Graph SDK keeps Connect-MgGraph state process-global. See mailbox-copy.ps1.
+    Start-Job -ScriptBlock $worker -ArgumentList $env:MIG_BACKEND_DIR, $env:MIG_DB_PATH, $env:MIG_LOG_DIR, $env:MIG_CONFIG_PATH, $jobId, $d.type, $d.source, $d.target | Out-Null
 
     Write-PodeJsonResponse -Value @{ started = $true; jobId = $jobId } -Depth 8
 }

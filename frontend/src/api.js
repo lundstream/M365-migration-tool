@@ -4,7 +4,7 @@
 const ARRAY_KEYS = new Set([
   'rows', 'users', 'batches', 'jobs', 'groups', 'permissions', 'mailboxes', 'items', 'plan',
   'results', 'tenants', 'services', 'mailboxBatches', 'fileMoves', 'manifests', 'columns',
-  'domains', 'notReady', 'skus', 'sites',
+  'domains', 'notReady', 'skus', 'sites', 'skippedItems',
 ])
 function normalizeArrays(node) {
   if (Array.isArray(node)) { node.forEach(normalizeArrays); return node }
@@ -98,6 +98,9 @@ export const api = {
   mailboxCopyJobs: () => request('/api/mailbox-copy/jobs'),
   mailboxCopyJob: (id) => request(`/api/mailbox-copy/jobs/${id}`),
   mailboxCopyStart: (sourceUpn, targetUpn, scope) => request('/api/mailbox-copy/start', { method: 'POST', body: JSON.stringify({ sourceUpn, targetUpn, scope, confirm: true }) }),
+  mailboxCopyForwarding: (body) => request('/api/mailbox-copy/forwarding', { method: 'POST', body: JSON.stringify({ ...body, confirm: true }) }),
+  mailboxCopyForwardingPolicy: () => request('/api/mailbox-copy/forwarding-policy'),
+  mailboxCopySetForwardingPolicy: (mode) => request('/api/mailbox-copy/forwarding-policy', { method: 'POST', body: JSON.stringify({ mode, confirm: true }) }),
 
   // Phase 5 — mailbox batches
   mailboxBatches: () => request('/api/mailbox/batches'),
